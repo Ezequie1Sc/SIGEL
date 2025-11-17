@@ -7,7 +7,6 @@ import 'package:flutter_application_hola/src/pages/Teacher/publications_Screen.d
 import 'package:flutter_application_hola/src/pages/presentation/register_screen.dart';
 import 'package:flutter_application_hola/src/pages/schedule_screen.dart';
 import 'package:flutter_application_hola/src/pages/presentation/session_screen.dart';
-import 'package:flutter_application_hola/src/pages/setting_screen.dart';
 import 'package:flutter_application_hola/src/pages/presentation/splash_screen.dart';
 import 'package:flutter_application_hola/src/pages/Teacher/taskteacher_Screen.dart';
 import 'package:flutter_application_hola/src/pages/Teacher/teacheralum_screen.dart';
@@ -41,7 +40,6 @@ class MyApp extends StatelessWidget {
         "teacherinventory": (context) => _buildTeacherInventoryScreen(),
         "teacheralum": (context) => const TeacheralumScreen(),
         "schedule": (context) => _buildScheduleScreen(),
-        "teacherinventory": (context) => _buildTeacherInventoryScreen(),
       },
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
