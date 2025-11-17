@@ -1,0 +1,45 @@
+name: flutter_application_hola
+description: A new Flutter project.
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  intl: ^0.20.2
+  fl_chart: ^0.70.2
+  syncfusion_flutter_charts: ^29.1.33
+  table_calendar: ^3.0.9
+  http: ^1.2.2
+  shared_preferences: ^2.2.2
+  file_picker: ^8.3.2
+  path_provider: ^2.1.3
+  open_file: ^3.3.2
+  flutter_launcher_icons: ^0.14.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/slogosi.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/fondoA.jpeg
+    - assets/sigelLogo.png
+    - assets/usuario.png
+    - assets/slogosi.png
+    - assets/fondo1.jpeg
+    - assets/blanco.png
+    - assets/fondoResu.jpg
+    - assets/labo.jpg
+    - assets/labo3.jpg
