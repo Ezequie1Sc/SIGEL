@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://sigel_user:sigel_password@db:5432/sigeldb
+      - SECRET_KEY=tu-clave-secreta-aqui
+    volumes:
+      - ./uploads:/app/uploads
+      - ./app:/app
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=sigeldb
+      - POSTGRES_USER=sigel_user
+      - POSTGRES_PASSWORD=sigel_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
