@@ -1,10 +1,16 @@
 # 📱 SIGEL Mobile App
 Aplicación móvil desarrollada en Flutter para gestión de inventarios, tareas y control de laboratorio.
+https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white
+https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white
+https://img.shields.io/badge/Flask_API-000000?style=for-the-badge&logo=flask&logoColor=white
+https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white
+https://img.shields.io/badge/iOS-000000?style=for-the-badge&logo=apple&logoColor=white
+
 
 ## 🚀 Tecnologías
 Flutter 3.x - Framework de desarrollo móvil
 
-- Dart - Lenguaje de programación
+- Dart - Lenguaje de programación 
 - Flask REST API - Backend y servicios
 - PostgreSQL - Base de datos
 - HTTP - Cliente para APIs REST
