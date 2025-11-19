@@ -8,7 +8,15 @@
 Sistema integral de gestión para laboratorios académicos desarrollado con Flutter para el frontend móvil y Python/Flask para el backend.
 
 
+Sistema integral de gestión para laboratorios académicos desarrollado con Flutter para el fr# SIGEL - Sistema de Gestión de Laboratorio
+
+![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+
 Sistema integral de gestión para laboratorios académicos desarrollado con Flutter para el frontend móvil y Python/Flask para el backend.
+ontend móvil y Python/Flask para el backend.
 ## 🚀 Características Principales
 
 - **Gestión de Inventario** - Control completo de reactivos y materiales
