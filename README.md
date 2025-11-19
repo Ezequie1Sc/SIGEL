@@ -1,5 +1,5 @@
 
-#📱 SIGEL Mobile App
+##📱 SIGEL Mobile App
 
 Aplicación móvil desarrollada en Flutter para gestión de inventarios, tareas y control de laboratorio.
 
