@@ -62,34 +62,101 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
   }
 
   void _checkDeliveryStatus() {
-    final userDelivery = widget.task.deliveries.firstWhere(
-      (delivery) => delivery['id_alumno'] == widget.userId,
-      orElse: () => {},
-    );
-    if (userDelivery.isNotEmpty) {
-      setState(() {
-        _currentStatus = TaskStatus.delivered;
-        _userDelivery = userDelivery;
-        _comentariosController.text = userDelivery['observaciones'] ?? '';
-      });
+    try {
+      print('=== DEBUG _checkDeliveryStatus ===');
+      print('User ID: ${widget.userId}');
+      print('Task deliveries: ${widget.task.deliveries}');
+      
+      if (widget.task.deliveries.isEmpty) {
+        print('No deliveries found for this task');
+        return;
+      }
+      
+      // Buscar la entrega del usuario actual
+      for (var delivery in widget.task.deliveries) {
+        print('Checking delivery: $delivery');
+        
+        final alumnoId = delivery['id_alumno'];
+        print('Delivery alumno ID: $alumnoId, Type: ${alumnoId.runtimeType}');
+        
+        if (alumnoId != null) {
+          // Convertir a int para comparar
+          int deliveryAlumnoId;
+          if (alumnoId is int) {
+            deliveryAlumnoId = alumnoId;
+          } else if (alumnoId is String) {
+            deliveryAlumnoId = int.tryParse(alumnoId) ?? 0;
+          } else {
+            deliveryAlumnoId = 0;
+          }
+          
+          print('Converted alumno ID: $deliveryAlumnoId');
+          
+          if (deliveryAlumnoId == widget.userId) {
+            print('✅ Found delivery for user ${widget.userId}');
+            print('Delivery data: $delivery');
+            
+            setState(() {
+              _currentStatus = TaskStatus.delivered;
+              _userDelivery = Map<String, dynamic>.from(delivery);
+              _comentariosController.text = delivery['observaciones']?.toString() ?? '';
+            });
+            
+            print('Status updated to: $_currentStatus');
+            print('User delivery set: $_userDelivery');
+            return;
+          }
+        }
+      }
+      
+      print('❌ No delivery found for user ${widget.userId}');
+    } catch (e) {
+      print('Error in _checkDeliveryStatus: $e');
     }
   }
 
   bool _isDeliveryOnTime(Map<String, dynamic> delivery) {
     if (delivery['fecha_entrega'] == null) return false;
-    final deliveryDate = DateTime.parse(delivery['fecha_entrega']);
-    final dueDateTime = DateTime(
-      widget.task.dueDate.year,
-      widget.task.dueDate.month,
-      widget.task.dueDate.day,
-      widget.task.dueTime != null
-          ? int.parse(widget.task.dueTime!.split(':')[0])
-          : 23,
-      widget.task.dueTime != null
-          ? int.parse(widget.task.dueTime!.split(':')[1])
-          : 59,
-    );
-    return deliveryDate.isBefore(dueDateTime) || deliveryDate.isAtSameMomentAs(dueDateTime);
+    try {
+      final deliveryDate = DateTime.parse(delivery['fecha_entrega']);
+      DateTime dueDateTime;
+      
+      if (widget.task.dueTime != null && widget.task.dueTime!.isNotEmpty) {
+        try {
+          final timeParts = widget.task.dueTime!.split(':');
+          final hour = int.parse(timeParts[0]);
+          final minute = int.parse(timeParts[1]);
+          dueDateTime = DateTime(
+            widget.task.dueDate.year,
+            widget.task.dueDate.month,
+            widget.task.dueDate.day,
+            hour,
+            minute,
+          );
+        } catch (e) {
+          dueDateTime = DateTime(
+            widget.task.dueDate.year,
+            widget.task.dueDate.month,
+            widget.task.dueDate.day,
+            23,
+            59,
+          );
+        }
+      } else {
+        dueDateTime = DateTime(
+          widget.task.dueDate.year,
+          widget.task.dueDate.month,
+          widget.task.dueDate.day,
+          23,
+          59,
+        );
+      }
+      
+      return deliveryDate.isBefore(dueDateTime) || deliveryDate.isAtSameMomentAs(dueDateTime);
+    } catch (e) {
+      print('Error checking delivery time: $e');
+      return false;
+    }
   }
 
   Future<void> _agregarArchivo() async {
@@ -105,7 +172,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
+        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'],
       );
 
       if (result != null && result.files.single.path != null) {
@@ -123,13 +190,12 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     } catch (e) {
       _showCustomNotification(
         title: 'Error',
-        message: 'Error al seleccionar archivo',
+        message: 'Error al seleccionar archivo: $e',
         type: 'error',
       );
     }
   }
 
-  // DIÁLOGO DE CONFIRMACIÓN PARA SUBIR ARCHIVO
   Future<bool?> _showFileConfirmationDialog({required String fileName}) async {
     return showDialog<bool>(
       context: context,
@@ -266,25 +332,25 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     );
   }
 
-  Future<void> _descargarArchivoTarea(String resourceType, int resourceId, String fileName) async {
-    try {
-      final file = await _apiService.downloadFile(
-        resourceType: resourceType,
-        resourceId: resourceId,
-        fileName: fileName,
-      );
-      _showSuccessDialog(
-        title: '¡Descarga Exitosa!',
-        message: 'El archivo se ha descargado correctamente',
-      );
-      await OpenFile.open(file.path);
-    } catch (e) {
-      _showErrorDialog(
-        title: 'Error en Descarga',
-        message: 'No se pudo descargar el archivo',
-      );
-    }
+Future<void> _descargarArchivoTarea(String resourceType, int resourceId, String filePath) async {
+  try {
+    final file = await _apiService.downloadFile(
+      resourceType: resourceType,
+      resourceId: resourceId,
+      filePath: filePath, // CAMBIADO: fileName -> filePath
+    );
+    _showSuccessDialog(
+      title: '¡Descarga Exitosa!',
+      message: 'El archivo se ha descargado correctamente',
+    );
+    await OpenFile.open(file.path);
+  } catch (e) {
+    _showErrorDialog(
+      title: 'Error en Descarga',
+      message: 'No se pudo descargar el archivo: $e',
+    );
   }
+}
 
   Future<void> _eliminarEntrega() async {
     if (_userDelivery == null || _userDelivery!['id_entrega'] == null) {
@@ -342,7 +408,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
       });
       _showErrorDialog(
         title: 'Error al Eliminar',
-        message: 'No se pudo eliminar la entrega',
+        message: 'No se pudo eliminar la entrega: $e',
       );
     } finally {
       setState(() {
@@ -427,7 +493,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
       });
       _showErrorDialog(
         title: 'Error al Enviar',
-        message: 'No se pudo enviar la tarea. Intenta nuevamente.',
+        message: 'No se pudo enviar la tarea. Intenta nuevamente: $e',
       );
     } finally {
       setState(() {
@@ -436,7 +502,6 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     }
   }
 
-  // DIÁLOGO DE ÉXITO - ESTILO ACTUALIZADO
   Future<void> _showSuccessDialog({required String title, required String message}) async {
     await showDialog(
       context: context,
@@ -544,7 +609,6 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     );
   }
 
-  // DIÁLOGO DE ERROR - ESTILO ACTUALIZADO
   Future<void> _showErrorDialog({required String title, required String message}) async {
     await showDialog(
       context: context,
@@ -652,7 +716,6 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     );
   }
 
-  // DIÁLOGO DE CONFIRMACIÓN MEJORADO
   Future<bool?> _showConfirmationDialog({
     required String title,
     required String message,
@@ -777,7 +840,6 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     );
   }
 
-  // NOTIFICACIONES FLOTANTES MEJORADAS
   void _showCustomNotification({
     required String title,
     required String message,
@@ -863,39 +925,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
   }
 
   String _calcularTiempoRestante() {
-    final ahora = DateTime.now();
-    DateTime dueDateTime = widget.task.dueDate;
-
-    if (widget.task.dueTime != null) {
-      try {
-        final timeParts = widget.task.dueTime!.split(':');
-        final hour = int.parse(timeParts[0]);
-        final minute = int.parse(timeParts[1]);
-        dueDateTime = DateTime(
-          widget.task.dueDate.year,
-          widget.task.dueDate.month,
-          widget.task.dueDate.day,
-          hour,
-          minute,
-        );
-      } catch (e) {
-        dueDateTime = widget.task.dueDate.add(const Duration(hours: 23, minutes: 59));
-      }
-    }
-
-    final diferencia = dueDateTime.difference(ahora);
-
-    if (diferencia.isNegative) {
-      return 'Tiempo expirado';
-    } else if (diferencia.inDays > 0) {
-      return '${diferencia.inDays} días ${diferencia.inHours.remainder(24)} horas';
-    } else if (diferencia.inHours > 0) {
-      return '${diferencia.inHours} horas ${diferencia.inMinutes.remainder(60)} minutos';
-    } else if (diferencia.inMinutes > 0) {
-      return '${diferencia.inMinutes} minutos';
-    } else {
-      return 'Menos de 1 minuto';
-    }
+    return widget.task.calculateRemainingTime();
   }
 
   void _eliminarArchivo() {
@@ -907,6 +937,61 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
       message: 'El archivo ha sido removido de tu entrega',
       type: 'success',
     );
+  }
+
+  Widget _buildCalificacionWidget(String value) {
+    print('Building calificacion widget with value: "$value"');
+    
+    final calificacion = double.tryParse(value);
+    
+    if (calificacion != null) {
+      return Row(
+        children: [
+          Text(
+            calificacion.toStringAsFixed(1),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: calificacion >= 6 ? Colors.green.shade700 : Colors.red.shade700,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Row(
+            children: List.generate(5, (index) {
+              final starValue = index + 1;
+              return Icon(
+                calificacion >= starValue
+                    ? Icons.star
+                    : calificacion >= starValue - 0.5
+                        ? Icons.star_half
+                        : Icons.star_border,
+                size: 20,
+                color: calificacion >= 6 ? Colors.amber : Colors.orange,
+              );
+            }),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '/10',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      );
+    } else {
+      return Text(
+        value,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: value == 'Sin calificar' || value.isEmpty 
+              ? Colors.grey.shade600 
+              : Colors.indigo.shade800,
+        ),
+      );
+    }
   }
 
   @override
@@ -1062,8 +1147,8 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
           _buildInfoRow(
             icon: Icons.calendar_today,
             label: 'Fecha de entrega:',
-            value: _formatDueDateTime(),
-            valueColor: widget.task.dueDate.isBefore(DateTime.now())
+            value: widget.task.formattedDueDateTime,
+            valueColor: widget.task.isExpired
                 ? Colors.red.shade600
                 : Colors.indigo.shade800,
           ),
@@ -1077,27 +1162,6 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
         ],
       ),
     );
-  }
-
-  String _formatDueDateTime() {
-    DateTime dueDateTime = widget.task.dueDate;
-    if (widget.task.dueTime != null) {
-      try {
-        final timeParts = widget.task.dueTime!.split(':');
-        final hour = int.parse(timeParts[0]);
-        final minute = int.parse(timeParts[1]);
-        dueDateTime = DateTime(
-          widget.task.dueDate.year,
-          widget.task.dueDate.month,
-          widget.task.dueDate.day,
-          hour,
-          minute,
-        );
-      } catch (e) {
-        // Fallback to date only if time parsing fails
-      }
-    }
-    return DateFormat('dd MMMM yyyy - hh:mm a').format(dueDateTime);
   }
 
   Widget _buildInstructionsSection() {
@@ -1162,42 +1226,66 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
           icon: Icons.access_time,
           title: 'Tiempo restante:',
           value: _calcularTiempoRestante(),
-          valueColor: widget.task.dueDate.isBefore(DateTime.now().add(const Duration(days: 1)))
-              ? Colors.orange.shade700
-              : Colors.indigo.shade800,
-          iconColor: Colors.orange.shade600,
+          valueColor: widget.task.isExpired
+              ? Colors.red.shade700
+              : (widget.task.dueDate.isBefore(DateTime.now().add(const Duration(days: 1)))
+                  ? Colors.orange.shade700
+                  : Colors.indigo.shade800),
+          iconColor: widget.task.isExpired
+              ? Colors.red.shade600
+              : Colors.orange.shade600,
         ),
         _buildDetailItem(
           icon: Icons.assignment_turned_in,
           title: 'Estatus de entrega:',
           value: _currentStatus == TaskStatus.pending
               ? 'Pendiente de entrega'
-              : _userDelivery != null && _isDeliveryOnTime(_userDelivery!) ? 'Entregado a tiempo' : 'Entregado tarde',
+              : (_userDelivery != null && _isDeliveryOnTime(_userDelivery!)) 
+                  ? 'Entregado a tiempo' 
+                  : 'Entregado tarde',
           valueColor: _currentStatus == TaskStatus.pending
               ? Colors.orange.shade700
-              : (_userDelivery != null && _isDeliveryOnTime(_userDelivery!) ? Colors.green.shade700 : Colors.orange.shade700),
+              : (_userDelivery != null && _isDeliveryOnTime(_userDelivery!)) 
+                  ? Colors.green.shade700 
+                  : Colors.orange.shade700,
           iconColor: _currentStatus == TaskStatus.pending
               ? Colors.orange.shade600
-              : (_userDelivery != null && _isDeliveryOnTime(_userDelivery!) ? Colors.green.shade600 : Colors.orange.shade600),
+              : (_userDelivery != null && _isDeliveryOnTime(_userDelivery!)) 
+                  ? Colors.green.shade600 
+                  : Colors.orange.shade600,
         ),
         if (_userDelivery != null && _userDelivery!.isNotEmpty) ...[
           const SizedBox(height: 12),
           _buildDetailItem(
-            icon: Icons.star,
+            icon: Icons.grade,
             title: 'Calificación:',
-            value: _userDelivery!['calificacion'] ?? 'Sin calificar',
+            value: _userDelivery!['calificacion']?.toString() ?? 'Sin calificar',
             valueColor: Colors.indigo.shade800,
-            iconColor: Colors.yellow.shade600,
+            iconColor: Colors.yellow.shade700,
+            isCalificacion: true,
           ),
           if (_userDelivery!['observaciones'] != null &&
-              _userDelivery!['observaciones'] != 'Sin observaciones') ...[
+              _userDelivery!['observaciones'].toString().isNotEmpty &&
+              _userDelivery!['observaciones'].toString() != 'Sin observaciones') ...[
             const SizedBox(height: 12),
             _buildDetailItem(
               icon: Icons.comment,
-              title: 'Observaciones:',
-              value: _userDelivery!['observaciones'],
+              title: 'Observaciones del profesor:',
+              value: _userDelivery!['observaciones'].toString(),
               valueColor: Colors.indigo.shade800,
               iconColor: Colors.indigo.shade600,
+            ),
+          ],
+          if (_userDelivery!['fecha_entrega'] != null) ...[
+            const SizedBox(height: 12),
+            _buildDetailItem(
+              icon: Icons.schedule,
+              title: 'Fecha de entrega:',
+              value: DateFormat('dd MMMM yyyy - hh:mm a').format(
+                DateTime.parse(_userDelivery!['fecha_entrega']),
+              ),
+              valueColor: Colors.indigo.shade800,
+              iconColor: Colors.blue.shade600,
             ),
           ],
         ],
@@ -1409,7 +1497,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
             ),
           ),
         ],
-      ),
+      )
     );
   }
 
@@ -1419,6 +1507,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     required String value,
     Color? valueColor,
     Color? iconColor,
+    bool isCalificacion = false,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1461,14 +1550,16 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: valueColor ?? Colors.indigo.shade800,
-                  ),
-                ),
+                isCalificacion
+                    ? _buildCalificacionWidget(value)
+                    : Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: valueColor ?? Colors.indigo.shade800,
+                        ),
+                      ),
               ],
             ),
           ),

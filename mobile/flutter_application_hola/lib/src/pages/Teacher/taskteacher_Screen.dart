@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_hola/src/services/api_task_services.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
-
 import 'package:open_file/open_file.dart';
+import 'package:file_picker/file_picker.dart';
 
 class ProfessionalTaskManagementScreen extends StatefulWidget {
   final int userId;
@@ -26,24 +26,28 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _commentController = TextEditingController();
-  final TextEditingController _gradeController = TextEditingController();
   final TextEditingController _manualGradeController = TextEditingController();
   final TextEditingController _announcementTextController = TextEditingController();
   final TextEditingController _announcementTitleController = TextEditingController();
+
   DateTime? _dueDateTime;
   String _filterStatus = 'Todos';
   final List<String> _statusFilters = ['Todos', 'A tiempo', 'Tarde', 'Sin calificar'];
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+
   List<Map<String, dynamic>> _assignments = [];
   List<Map<String, dynamic>> _announcements = [];
+
   bool _isLoadingTasks = true;
   bool _isLoadingAnnouncements = true;
+
   File? _selectedFile;
+
   final ApiTaskServices _apiService = ApiTaskServices();
-  
-  // Controladores de scroll para cada pestaña
+
   final ScrollController _tab1ScrollController = ScrollController();
   final ScrollController _tab2ScrollController = ScrollController();
   final ScrollController _tab3ScrollController = ScrollController();
@@ -63,11 +67,11 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
       begin: const Offset(0, 0.1),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
+
     _animationController.forward();
     _fetchTasks();
     _fetchAnnouncements();
-    
-    // Configurar listeners de scroll
+
     _setupScrollListener(_tab1ScrollController);
     _setupScrollListener(_tab2ScrollController);
     _setupScrollListener(_tab3ScrollController);
@@ -75,22 +79,17 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
 
   void _setupScrollListener(ScrollController controller) {
     controller.addListener(() {
-      if (widget.navBarVisibilityNotifier != null) {
-        final currentOffset = controller.offset;
-        
-        if (currentOffset > _lastScrollOffset + 15 && widget.navBarVisibilityNotifier!.value) {
-          // Scroll hacia abajo - ocultar navbar
-          widget.navBarVisibilityNotifier!.value = false;
-        } else if (currentOffset < _lastScrollOffset - 8 && !widget.navBarVisibilityNotifier!.value && currentOffset > 0) {
-          // Scroll hacia arriba - mostrar navbar
-          widget.navBarVisibilityNotifier!.value = true;
-        } else if (currentOffset <= 0 && !widget.navBarVisibilityNotifier!.value) {
-          // Llegamos al top - mostrar navbar
-          widget.navBarVisibilityNotifier!.value = true;
-        }
-        
-        _lastScrollOffset = currentOffset;
+      if (widget.navBarVisibilityNotifier == null) return;
+      final currentOffset = controller.offset;
+
+      if (currentOffset > _lastScrollOffset + 15 && widget.navBarVisibilityNotifier!.value) {
+        widget.navBarVisibilityNotifier!.value = false;
+      } else if (currentOffset < _lastScrollOffset - 8 && !widget.navBarVisibilityNotifier!.value && currentOffset > 0) {
+        widget.navBarVisibilityNotifier!.value = true;
+      } else if (currentOffset <= 0 && !widget.navBarVisibilityNotifier!.value) {
+        widget.navBarVisibilityNotifier!.value = true;
       }
+      _lastScrollOffset = currentOffset;
     });
   }
 
@@ -99,7 +98,6 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
     _titleController.dispose();
     _descriptionController.dispose();
     _commentController.dispose();
-    _gradeController.dispose();
     _manualGradeController.dispose();
     _announcementTextController.dispose();
     _announcementTitleController.dispose();
@@ -117,38 +115,21 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
         userId: widget.userId,
         userRole: widget.userRole,
       );
-      setState(() {
-        _assignments = tasks.map((task) {
-          final entregas = (task['deliveries'] as List<dynamic>? ?? []).map((delivery) {
-            return {
-              'id_entrega': delivery['id_entrega'] ?? delivery['id'],
-              'alumno': delivery['alumno'] ?? 'Desconocido',
-              'fecha_entrega': delivery['fecha_entrega'] ?? '',
-              'calificacion': delivery['calificacion'] ?? null,
-              'observaciones': delivery['observaciones'] ?? '',
-              'status': delivery['status'] ?? 'pending',
-              'archivo_ruta': delivery['archivo_ruta'] ?? 'Sin archivo',
-            } as Map<String, dynamic>;
-          }).toList();
-          return {
-            'id': task['id'],
-            'titulo': task['title'] ?? task['titulo'] ?? 'Sin título',
-            'descripcion': task['description'] ?? task['descripcion'] ?? 'Sin descripción',
-            'fecha_entrega': task['due_date'] ?? task['fecha_entrega'] ?? '',
-            'hora_cierre': task['due_time'] ?? task['hora_cierre'] ?? '00:00',
-            'creador': task['creator'] ?? (task['creador'] != null
-                ? '${task['creador']['nombre'] ?? ''} ${task['creador']['apellido'] ?? ''}'.trim()
-                : 'Desconocido'),
-            'archivo_ruta': task['archivo_ruta'] ?? 'Sin archivo',
-            'status': task['status'] ?? 'pending',
-            'entregas': entregas,
-          } as Map<String, dynamic>;
-        }).toList().cast<Map<String, dynamic>>();
-        _isLoadingTasks = false;
-      });
+      print('Tareas obtenidas del API: ${tasks.length}');
+      
+      if (mounted) {
+        setState(() {
+          _assignments = tasks;
+          _isLoadingTasks = false;
+          _printDebugInfo();
+        });
+      }
     } catch (e) {
-      setState(() => _isLoadingTasks = false);
-      _showSnackBar('Error al cargar tareas: $e', Colors.red[600]);
+      print('Error al cargar tareas: $e');
+      if (mounted) {
+        setState(() => _isLoadingTasks = false);
+        _showSnackBar('Error al cargar tareas. Verifica tu conexión o intenta más tarde.', Colors.red[700]);
+      }
     }
   }
 
@@ -156,23 +137,44 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
     setState(() => _isLoadingAnnouncements = true);
     try {
       final announcements = await _apiService.getAllAnnouncements();
-      setState(() {
-        _announcements = announcements.map((announcement) {
-          return {
-            'id': announcement['id_aviso'],
-            'titulo': announcement['titulo'] ?? 'Sin título',
-            'texto': announcement['texto'] ?? '',
-            'fecha_hora': announcement['fecha_hora'] ?? '',
-            'usuario': announcement['usuario'] != null
-                ? '${announcement['usuario']['nombre'] ?? ''} ${announcement['usuario']['apellido'] ?? ''}'.trim()
-                : 'Desconocido',
-          };
-        }).toList();
-        _isLoadingAnnouncements = false;
-      });
+      
+      print('Avisos obtenidos del API: $announcements');
+      
+      if (mounted) {
+        setState(() {
+          _announcements = announcements.map((announcement) {
+            final id = announcement['id_aviso'] ?? announcement['id'] ?? 0;
+            final titulo = announcement['titulo'] ?? announcement['title'] ?? 'Sin título';
+            final texto = announcement['texto'] ?? announcement['content'] ?? '';
+            final fechaHora = announcement['fecha_hora'] ?? announcement['fecha'] ?? announcement['created_at'] ?? '';
+            
+            String usuario = 'Desconocido';
+            if (announcement['usuario'] != null && announcement['usuario'] is Map) {
+              usuario = '${announcement['usuario']['nombre'] ?? ''} ${announcement['usuario']['apellido'] ?? ''}'.trim();
+            } else if (announcement['creador'] != null && announcement['creador'] is Map) {
+              usuario = '${announcement['creador']['nombre'] ?? ''} ${announcement['creador']['apellido'] ?? ''}'.trim();
+            } else if (announcement['user'] != null && announcement['user'] is Map) {
+              usuario = '${announcement['user']['name'] ?? ''} ${announcement['user']['last_name'] ?? ''}'.trim();
+            }
+            
+            return {
+              'id': id,
+              'titulo': titulo,
+              'texto': texto,
+              'fecha_hora': fechaHora,
+              'usuario': usuario.isNotEmpty ? usuario : 'Desconocido',
+            };
+          }).toList();
+          
+          _isLoadingAnnouncements = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoadingAnnouncements = false);
-      _showSnackBar('Error al cargar avisos: $e', Colors.red[600]);
+      print('Error al cargar avisos: $e');
+      if (mounted) {
+        setState(() => _isLoadingAnnouncements = false);
+        _showSnackBar('Error al cargar avisos', Colors.red[700]);
+      }
     }
   }
 
@@ -194,15 +196,42 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
     }
   }
 
+  Future<void> _pickFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _selectedFile = File(result.files.single.path!);
+        });
+        _showSnackBar('Archivo seleccionado: ${result.files.single.name}', Colors.green[600]);
+      }
+    } catch (e) {
+      print('Error al seleccionar archivo: $e');
+      _showSnackBar('Error al seleccionar archivo', Colors.red[600]);
+    }
+  }
+
   Future<void> _assignTask() async {
     if (_titleController.text.isEmpty || _dueDateTime == null) {
       _showSnackBar('Título y fecha/hora son requeridos', Colors.red[600]);
       return;
     }
-
+    
     try {
       final dateStr = DateFormat('yyyy-MM-dd').format(_dueDateTime!);
       final timeStr = DateFormat('HH:mm:ss').format(_dueDateTime!);
+      
+      print('Creando tarea con datos:');
+      print('  Título: ${_titleController.text}');
+      print('  Fecha: $dateStr');
+      print('  Hora: $timeStr');
+      print('  Creado por: ${widget.userId}');
+      print('  Archivo: ${_selectedFile?.path}');
+      
       final task = await _apiService.createTask(
         titulo: _titleController.text,
         descripcion: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
@@ -211,74 +240,89 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
         creadoPor: widget.userId,
         archivo: _selectedFile,
       );
+      
+      print('Tarea creada: $task');
+      
       setState(() {
         _assignments.insert(0, {
-          'id': int.parse(task['id'].toString()),
-          'titulo': task['titulo'] ?? _titleController.text,
-          'descripcion': task['descripcion'] ?? 'Sin descripción',
-          'fecha_entrega': task['due_date'] ?? task['fecha_entrega'] ?? dateStr,
-          'hora_cierre': task['due_time'] ?? task['hora_cierre'] ?? timeStr,
-          'creador': task['creador'] != null
-              ? '${task['creador']['nombre'] ?? ''} ${task['creador']['apellido'] ?? ''}'.trim()
-              : 'Desconocido',
+          'id': int.parse(task['id']?.toString() ?? '0'),
+          'title': task['titulo'] ?? _titleController.text,
+          'description': task['descripcion'] ?? 'Sin descripción',
+          'due_date': dateStr,
+          'due_time': timeStr,
+          'creator': 'Tú',
+          'creator_id': widget.userId,
           'archivo_ruta': task['archivo_ruta'] ?? 'Sin archivo',
-          'status': task['status'] ?? 'pending',
-          'entregas': task['deliveries'] ?? task['entregas'] ?? [],
+          'status': 'pending',
+          'deliveries': [],
         });
+        
         _titleController.clear();
         _descriptionController.clear();
         _dueDateTime = null;
         _selectedFile = null;
       });
-      _showSnackBar('Tarea asignada correctamente', Colors.green[600]);
+      
+      _showSnackBar('✅ Tarea asignada correctamente', Colors.green[600]);
+      await _fetchTasks(); // Refrescar la lista
+      
     } catch (e) {
-      _showSnackBar('Error al asignar tarea: $e', Colors.red[600]);
+      print('Error al asignar tarea: $e');
+      _showSnackBar('❌ Error al asignar tarea: ${e.toString()}', Colors.red[600]);
     }
   }
 
   Future<void> _editTask(int taskIndex) async {
+    if (taskIndex >= _assignments.length) return;
+    
     final task = _assignments[taskIndex];
-    _titleController.text = task['titulo'] ?? '';
-    _descriptionController.text = task['descripcion'] ?? '';
-    _dueDateTime = task['fecha_entrega'] != null && task['hora_cierre'] != null
-        ? DateTime.parse('${task['fecha_entrega']} ${task['hora_cierre'].split(':')[0]}:${task['hora_cierre'].split(':')[1]}:00')
-        : null;
+    _titleController.text = task['title'] ?? '';
+    _descriptionController.text = task['description'] ?? '';
+    
+    try {
+      if (task['due_date'] != null) {
+        final dateStr = task['due_date'].toString();
+        final timeStr = task['due_time']?.toString() ?? '23:59:00';
+        _dueDateTime = DateTime.parse('$dateStr ${timeStr.split(':')[0]}:${timeStr.split(':')[1]}:00');
+      }
+    } catch (e) {
+      print('Error parseando fecha: $e');
+    }
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: Colors.white,
-        title: Text(
-          'Editar Tarea',
-          style: TextStyle(color: Colors.indigo[900], fontSize: 20, fontWeight: FontWeight.bold),
-        ),
+        title: Text('Editar Tarea', style: TextStyle(color: Colors.indigo[900], fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: _titleController,
-                decoration: _inputDecoration('Título de la tarea', Icons.title),
-              ),
+              TextField(controller: _titleController, decoration: _inputDecoration('Título de la tarea', Icons.title)),
               const SizedBox(height: 16),
-              TextField(
-                controller: _descriptionController,
-                maxLines: 4,
-                decoration: _inputDecoration('Instrucciones de la tarea', Icons.description),
-              ),
+              TextField(controller: _descriptionController, maxLines: 4, decoration: _inputDecoration('Instrucciones de la tarea', Icons.description)),
               const SizedBox(height: 16),
               InkWell(
                 onTap: () => _selectDueDateTime(context),
                 child: InputDecorator(
                   decoration: _inputDecoration('Fecha y hora de entrega', Icons.calendar_today),
                   child: Text(
-                    _dueDateTime != null
-                        ? DateFormat('dd MMM yyyy, HH:mm').format(_dueDateTime!)
-                        : 'Seleccionar fecha y hora',
+                    _dueDateTime != null ? DateFormat('dd MMM yyyy, HH:mm').format(_dueDateTime!) : 'Seleccionar fecha y hora',
                     style: TextStyle(color: Colors.indigo[900], fontSize: 16),
                   ),
                 ),
+              ),
+              const SizedBox(height: 16),
+              if (_selectedFile != null)
+                Text(
+                  'Archivo seleccionado: ${_selectedFile!.path.split('/').last}',
+                  style: TextStyle(color: Colors.indigo[600]),
+                ),
+              OutlinedButton.icon(
+                onPressed: _pickFile,
+                icon: Icon(Icons.upload, color: Colors.indigo[600]),
+                label: const Text('Cambiar archivo'),
               ),
             ],
           ),
@@ -286,7 +330,7 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar', style: TextStyle(color: Colors.indigo[600], fontSize: 16)),
+            child: Text('Cancelar', style: TextStyle(color: Colors.indigo[600])),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -294,9 +338,11 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
                 _showSnackBar('Título y fecha/hora son requeridos', Colors.red[600]);
                 return;
               }
+              
               try {
                 final dateStr = DateFormat('yyyy-MM-dd').format(_dueDateTime!);
                 final timeStr = DateFormat('HH:mm:ss').format(_dueDateTime!);
+                
                 final updatedTask = await _apiService.updateTask(
                   taskId: task['id'],
                   titulo: _titleController.text,
@@ -305,37 +351,40 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
                   horaCierre: timeStr,
                   archivo: _selectedFile,
                 );
+                
+                print('Tarea actualizada: $updatedTask');
+                
                 setState(() {
                   _assignments[taskIndex] = {
-                    'id': int.parse(updatedTask['id'].toString()),
-                    'titulo': updatedTask['titulo'] ?? _titleController.text,
-                    'descripcion': updatedTask['descripcion'] ?? 'Sin descripción',
-                    'fecha_entrega': updatedTask['due_date'] ?? updatedTask['fecha_entrega'] ?? dateStr,
-                    'hora_cierre': updatedTask['due_time'] ?? updatedTask['hora_cierre'] ?? timeStr,
-                    'creador': updatedTask['creador'] != null
-                        ? '${updatedTask['creador']['nombre'] ?? ''} ${updatedTask['creador']['apellido'] ?? ''}'.trim()
-                        : 'Desconocido',
-                    'archivo_ruta': updatedTask['archivo_ruta'] ?? 'Sin archivo',
-                    'status': updatedTask['status'] ?? 'pending',
-                    'entregas': updatedTask['deliveries'] ?? updatedTask['entregas'] ?? [],
+                    'id': int.parse(updatedTask['id']?.toString() ?? '0'),
+                    'title': updatedTask['titulo'] ?? _titleController.text,
+                    'description': updatedTask['descripcion'] ?? 'Sin descripción',
+                    'due_date': dateStr,
+                    'due_time': timeStr,
+                    'creator': 'Tú',
+                    'creator_id': widget.userId,
+                    'archivo_ruta': updatedTask['archivo_ruta'] ?? task['archivo_ruta'] ?? 'Sin archivo',
+                    'status': task['status'] ?? 'pending',
+                    'deliveries': task['deliveries'] ?? [],
                   };
                 });
+                
                 _titleController.clear();
                 _descriptionController.clear();
                 _dueDateTime = null;
                 _selectedFile = null;
+                
                 Navigator.pop(context);
-                _showSnackBar('Tarea actualizada correctamente', Colors.green[600]);
+                _showSnackBar('✅ Tarea actualizada correctamente', Colors.green[600]);
+                await _fetchTasks(); // Refrescar la lista
+                
               } catch (e) {
                 Navigator.pop(context);
-                _showSnackBar('Error al actualizar tarea: $e', Colors.red[600]);
+                _showSnackBar('❌ Error al actualizar tarea: ${e.toString()}', Colors.red[600]);
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo[600],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Guardar', style: TextStyle(color: Colors.white, fontSize: 16)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo[600]),
+            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -343,45 +392,38 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
   }
 
   Future<void> _deleteTask(int taskIndex) async {
+    if (taskIndex >= _assignments.length) return;
+    
     final task = _assignments[taskIndex];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: Colors.white,
-        title: Text(
-          'Confirmar Eliminación',
-          style: TextStyle(color: Colors.indigo[900], fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          '¿Estás seguro de que deseas eliminar la tarea "${task['titulo']}"?',
-          style: TextStyle(color: Colors.indigo[900], fontSize: 16),
-        ),
+        title: Text('Confirmar Eliminación', style: TextStyle(color: Colors.indigo[900], fontWeight: FontWeight.bold)),
+        content: Text('¿Estás seguro de que deseas eliminar la tarea "${task['title']}"?', style: TextStyle(color: Colors.indigo[900])),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('No', style: TextStyle(color: Colors.indigo[600], fontSize: 16)),
+            child: Text('No', style: TextStyle(color: Colors.indigo[600])),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[600],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Sí', style: TextStyle(color: Colors.white, fontSize: 16)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600]),
+            child: const Text('Sí', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+    
     if (confirm == true) {
       try {
         await _apiService.deleteTask(task['id']);
-        setState(() {
-          _assignments.removeAt(taskIndex);
-        });
-        _showSnackBar('Tarea eliminada correctamente', Colors.green[600]);
+        setState(() => _assignments.removeAt(taskIndex));
+        _showSnackBar('✅ Tarea eliminada correctamente', Colors.green[600]);
       } catch (e) {
-        _showSnackBar('Error al eliminar tarea: $e', Colors.red[600]);
+        print('Error al eliminar tarea: $e');
+        _showSnackBar('❌ Error al eliminar tarea: ${e.toString()}', Colors.red[600]);
       }
     }
   }
@@ -391,32 +433,40 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
       _showSnackBar('Título y texto del aviso son requeridos', Colors.red[600]);
       return;
     }
+    
     try {
       final announcement = await _apiService.createAnnouncement(
         idUsuario: widget.userId,
         titulo: _announcementTitleController.text,
         texto: _announcementTextController.text,
       );
+      
+      print('Aviso creado: $announcement');
+      
       setState(() {
         _announcements.insert(0, {
-          'id': announcement['id_aviso'],
-          'titulo': announcement['titulo'] ?? 'Sin título',
-          'texto': announcement['texto'] ?? '',
-          'fecha_hora': announcement['fecha_hora'] ?? '',
-          'usuario': announcement['usuario'] != null
-              ? '${announcement['usuario']['nombre'] ?? ''} ${announcement['usuario']['apellido'] ?? ''}'.trim()
-              : 'Desconocido',
+          'id': announcement['id_aviso'] ?? announcement['id'] ?? 0,
+          'titulo': announcement['titulo'] ?? _announcementTitleController.text,
+          'texto': announcement['texto'] ?? _announcementTextController.text,
+          'fecha_hora': announcement['fecha_hora'] ?? announcement['created_at'] ?? DateTime.now().toString(),
+          'usuario': 'Tú',
         });
         _announcementTitleController.clear();
         _announcementTextController.clear();
       });
-      _showSnackBar('Aviso creado correctamente', Colors.green[600]);
+      
+      _showSnackBar('✅ Aviso creado correctamente', Colors.green[600]);
+      await _fetchAnnouncements(); // Refrescar la lista
+      
     } catch (e) {
-      _showSnackBar('Error al crear aviso: $e', Colors.red[600]);
+      print('Error al crear aviso: $e');
+      _showSnackBar('❌ Error al crear aviso: ${e.toString()}', Colors.red[600]);
     }
   }
 
   Future<void> _editAnnouncement(int announcementIndex) async {
+    if (announcementIndex >= _announcements.length) return;
+    
     final announcement = _announcements[announcementIndex];
     _announcementTitleController.text = announcement['titulo'] ?? '';
     _announcementTextController.text = announcement['texto'] ?? '';
@@ -426,31 +476,21 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: Colors.white,
-        title: Text(
-          'Editar Aviso',
-          style: TextStyle(color: Colors.indigo[900], fontSize: 20, fontWeight: FontWeight.bold),
-        ),
+        title: Text('Editar Aviso', style: TextStyle(color: Colors.indigo[900], fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: _announcementTitleController,
-                decoration: _inputDecoration('Título del aviso', Icons.title),
-              ),
+              TextField(controller: _announcementTitleController, decoration: _inputDecoration('Título del aviso', Icons.title)),
               const SizedBox(height: 16),
-              TextField(
-                controller: _announcementTextController,
-                maxLines: 4,
-                decoration: _inputDecoration('Texto del aviso', Icons.announcement),
-              ),
+              TextField(controller: _announcementTextController, maxLines: 4, decoration: _inputDecoration('Texto del aviso', Icons.announcement)),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar', style: TextStyle(color: Colors.indigo[600], fontSize: 16)),
+            child: Text('Cancelar', style: TextStyle(color: Colors.indigo[600])),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -458,6 +498,7 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
                 _showSnackBar('Título y texto del aviso son requeridos', Colors.red[600]);
                 return;
               }
+              
               try {
                 final updatedAnnouncement = await _apiService.updateAnnouncement(
                   announcementId: announcement['id'],
@@ -465,31 +506,32 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
                   titulo: _announcementTitleController.text,
                   texto: _announcementTextController.text,
                 );
+                
+                print('Aviso actualizado: $updatedAnnouncement');
+                
                 setState(() {
                   _announcements[announcementIndex] = {
-                    'id': updatedAnnouncement['id_aviso'],
-                    'titulo': updatedAnnouncement['titulo'] ?? '',
-                    'texto': updatedAnnouncement['texto'] ?? '',
-                    'fecha_hora': updatedAnnouncement['fecha_hora'] ?? '',
-                    'usuario': updatedAnnouncement['usuario'] != null
-                        ? '${updatedAnnouncement['usuario']['nombre'] ?? ''} ${updatedAnnouncement['usuario']['apellido'] ?? ''}'.trim()
-                        : 'Desconocido',
+                    'id': updatedAnnouncement['id_aviso'] ?? updatedAnnouncement['id'] ?? 0,
+                    'titulo': updatedAnnouncement['titulo'] ?? _announcementTitleController.text,
+                    'texto': updatedAnnouncement['texto'] ?? _announcementTextController.text,
+                    'fecha_hora': updatedAnnouncement['fecha_hora'] ?? updatedAnnouncement['created_at'] ?? DateTime.now().toString(),
+                    'usuario': 'Tú',
                   };
                 });
+                
                 _announcementTitleController.clear();
                 _announcementTextController.clear();
                 Navigator.pop(context);
-                _showSnackBar('Aviso actualizado correctamente', Colors.green[600]);
+                _showSnackBar('✅ Aviso actualizado correctamente', Colors.green[600]);
+                await _fetchAnnouncements(); // Refrescar la lista
+                
               } catch (e) {
                 Navigator.pop(context);
-                _showSnackBar('Error al actualizar aviso: $e', Colors.red[600]);
+                _showSnackBar('❌ Error al actualizar aviso: ${e.toString()}', Colors.red[600]);
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo[600],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Guardar', style: TextStyle(color: Colors.white, fontSize: 16)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo[600]),
+            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -497,200 +539,299 @@ class _ProfessionalTaskManagementScreenState extends State<ProfessionalTaskManag
   }
 
   Future<void> _deleteAnnouncement(int announcementIndex) async {
+    if (announcementIndex >= _announcements.length) return;
+    
     final announcement = _announcements[announcementIndex];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: Colors.white,
-        title: Text(
-          'Confirmar Eliminación',
-          style: TextStyle(color: Colors.indigo[900], fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          '¿Estás seguro de que deseas eliminar el aviso "${announcement['titulo']}"?',
-          style: TextStyle(color: Colors.indigo[900], fontSize: 16),
-        ),
+        title: Text('Confirmar Eliminación', style: TextStyle(color: Colors.indigo[900], fontWeight: FontWeight.bold)),
+        content: Text('¿Estás seguro de que deseas eliminar el aviso "${announcement['titulo']}"?', style: TextStyle(color: Colors.indigo[900])),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('No', style: TextStyle(color: Colors.indigo[600], fontSize: 16)),
+            child: Text('No', style: TextStyle(color: Colors.indigo[600])),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[600],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Sí', style: TextStyle(color: Colors.white, fontSize: 16)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red[600]),
+            child: const Text('Sí', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
+    
     if (confirm == true) {
       try {
         await _apiService.deleteAnnouncement(announcement['id']);
-        setState(() {
-          _announcements.removeAt(announcementIndex);
-        });
-        _showSnackBar('Aviso eliminado correctamente', Colors.green[600]);
+        setState(() => _announcements.removeAt(announcementIndex));
+        _showSnackBar('✅ Aviso eliminado correctamente', Colors.green[600]);
       } catch (e) {
-        _showSnackBar('Error al eliminar aviso: $e', Colors.red[600]);
+        print('Error al eliminar aviso: $e');
+        _showSnackBar('❌ Error al eliminar aviso: ${e.toString()}', Colors.red[600]);
       }
     }
   }
 
   Future<void> _gradeAssignment(int assignmentIndex, int submissionIndex) async {
-    final submission = Map<String, dynamic>.from(_assignments[assignmentIndex]['entregas'][submissionIndex]);
-    _manualGradeController.text = (submission['calificacion'] is num)
-        ? submission['calificacion'].toStringAsFixed(0)
-        : (submission['calificacion'] != null ? submission['calificacion'].toString() : '');
-    _commentController.text = submission['observaciones']?.toString() ?? '';
+    try {
+      if (assignmentIndex >= _assignments.length) {
+        _showSnackBar('Error: Tarea no encontrada', Colors.red[600]);
+        return;
+      }
+      
+      final assignment = _assignments[assignmentIndex];
+      final entregas = assignment['deliveries'] as List<dynamic>? ?? [];
+      
+      if (submissionIndex >= entregas.length) {
+        _showSnackBar('Error: Entrega no encontrada', Colors.red[600]);
+        return;
+      }
+      
+      final submission = Map<String, dynamic>.from(entregas[submissionIndex]);
+      print('Calificando entrega: $submission');
+      
+      // Manejar la calificación
+      dynamic calificacionActual = submission['calificacion'];
+      _manualGradeController.text = '0';
+      
+      if (calificacionActual != null) {
+        if (calificacionActual is num) {
+          _manualGradeController.text = calificacionActual.toStringAsFixed(0);
+        } else if (calificacionActual.toString().isNotEmpty && 
+                   calificacionActual.toString().toLowerCase() != 'null' &&
+                   calificacionActual != 'Sin calificar') {
+          _manualGradeController.text = calificacionActual.toString();
+        }
+      }
+      
+      _commentController.text = submission['observaciones']?.toString() ?? '';
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: Colors.white,
-        title: Text(
-          'Calificar a ${submission['alumno'] ?? 'Estudiante'}',
-          style: TextStyle(color: Colors.indigo[900], fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _manualGradeController,
-                keyboardType: TextInputType.number,
-                decoration: _inputDecoration('Calificación (0-100)', Icons.grade),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _commentController,
-                maxLines: 3,
-                decoration: _inputDecoration('Comentario', Icons.comment),
-              ),
-              const SizedBox(height: 16),
-              if (submission['archivo_ruta'] != null && submission['archivo_ruta'] != 'Sin archivo') ...[
-                Text(
-                  'Archivo adjunto:',
-                  style: TextStyle(color: Colors.indigo[700], fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () => _downloadFile('entrega', submission['id_entrega'], submission['archivo_ruta']),
-                  icon: Icon(Icons.download, color: Colors.indigo[600]),
-                  label: Text('Descargar archivo', style: TextStyle(color: Colors.indigo[600])),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.indigo[600]!),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancelar', style: TextStyle(color: Colors.indigo[600], fontSize: 16)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final grade = double.tryParse(_manualGradeController.text) ?? 0.0;
-              if (grade < 0 || grade > 100) {
-                _showSnackBar('La calificación debe estar entre 0 y 100', Colors.red[600]);
-                return;
-              }
-              try {
-                final updatedDelivery = await _apiService.updateDelivery(
-                  deliveryId: submission['id_entrega'],
-                  calificacion: grade,
-                  observaciones: _commentController.text.isNotEmpty ? _commentController.text : null,
-                );
-                setState(() {
-                  final updatedSubmission = Map<String, dynamic>.from(submission)
-                    ..['calificacion'] = updatedDelivery['calificacion'] ?? grade
-                    ..['observaciones'] = updatedDelivery['observaciones'] ?? _commentController.text
-                    ..['status'] = updatedDelivery['status'] ?? submission['status'];
-                  _assignments[assignmentIndex]['entregas'][submissionIndex] = updatedSubmission;
-                });
-                _commentController.clear();
-                _manualGradeController.clear();
-                Navigator.pop(context);
-                _showSnackBar('Calificación guardada para ${submission['alumno']}', Colors.green[600]);
-              } catch (e) {
-                Navigator.pop(context);
-                _showSnackBar('Error al guardar calificación: $e', Colors.red[600]);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo[600],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Guardar', style: TextStyle(color: Colors.white, fontSize: 16)),
-          ),
-        ],
-      ),
-    );
-  }
-
-Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) async {
-  if (fileUrl == 'Sin archivo' || fileUrl.isEmpty) {
-    _showSnackBar('No hay archivo disponible para descargar', Colors.red[600]);
-    return;
-  }
-
-  try {
-    final fileName = fileUrl.split('/').last;
-    _showSnackBar('Descargando archivo...', Colors.blue[600]);
-
-    final file = await _apiService.downloadFile(
-      resourceType: resourceType,
-      resourceId: resourceId,
-      fileName: fileName,
-    );
-
-    if (await file.exists() && (await file.length() > 0)) {
-      // Mostrar diálogo para abrir el archivo
-      final shouldOpen = await showDialog<bool>(
+      showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('Descarga completada'),
-          content: Text('El archivo $fileName se ha descargado correctamente. ¿Deseas abrirlo?'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: Colors.white,
+          title: Text(
+            'Calificar a ${submission['alumno'] ?? 'Estudiante'}',
+            style: TextStyle(color: Colors.indigo[900], fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tarea: ${assignment['title'] ?? 'Sin título'}',
+                  style: TextStyle(color: Colors.indigo[700], fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Estudiante: ${submission['alumno'] ?? 'Desconocido'}',
+                  style: TextStyle(color: Colors.indigo[600]),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _manualGradeController,
+                  keyboardType: TextInputType.number,
+                  decoration: _inputDecoration('Calificación (0-100)', Icons.grade),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _commentController,
+                  maxLines: 3,
+                  decoration: _inputDecoration('Comentario', Icons.comment),
+                ),
+                const SizedBox(height: 16),
+                if (submission['archivo_ruta'] != null && 
+                    submission['archivo_ruta'].toString().isNotEmpty &&
+                    submission['archivo_ruta'] != 'Sin archivo') ...[
+                  Text(
+                    'Archivo adjunto:',
+                    style: TextStyle(color: Colors.indigo[700], fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context); // Cerrar diálogo primero
+                      _downloadFile(
+                        'entrega', 
+                        submission['id_entrega'] ?? 0, 
+                        submission['archivo_ruta'],
+                      );
+                    },
+                    icon: Icon(Icons.download, color: Colors.indigo[600]),
+                    label: Text(
+                      'Descargar ${submission['archivo_ruta'].split('/').last}',
+                      style: TextStyle(color: Colors.indigo[600]),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.indigo[600]!), 
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('No'),
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancelar', style: TextStyle(color: Colors.indigo[600])),
             ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('Sí'),
+            ElevatedButton(
+              onPressed: () async {
+                final gradeText = _manualGradeController.text.trim();
+                if (gradeText.isEmpty) {
+                  _showSnackBar('Por favor ingresa una calificación', Colors.red[600]);
+                  return;
+                }
+                
+                final grade = double.tryParse(gradeText) ?? 0.0;
+                if (grade < 0 || grade > 100) {
+                  _showSnackBar('La calificación debe estar entre 0 y 100', Colors.red[600]);
+                  return;
+                }
+                
+                try {
+                  print('Guardando calificación $grade para entrega ${submission['id_entrega']}');
+                  
+                  final updatedDelivery = await _apiService.updateDelivery(
+                    deliveryId: submission['id_entrega'] ?? 0,
+                    calificacion: grade,
+                    observaciones: _commentController.text.isNotEmpty ? _commentController.text : null,
+                  );
+                  
+                  print('Entrega actualizada: $updatedDelivery');
+                  
+                  setState(() {
+                    final updatedSubmission = Map<String, dynamic>.from(submission)
+                      ..['calificacion'] = updatedDelivery['calificacion']?.toString() ?? grade.toString()
+                      ..['observaciones'] = updatedDelivery['observaciones'] ?? _commentController.text
+                      ..['status'] = updatedDelivery['status'] ?? submission['status'];
+                    
+                    // Actualizar en la lista de entregas
+                    _assignments[assignmentIndex]['deliveries'][submissionIndex] = updatedSubmission;
+                  });
+                  
+                  _commentController.clear();
+                  _manualGradeController.clear();
+                  Navigator.pop(context);
+                  _showSnackBar('✅ Calificación guardada para ${submission['alumno']}', Colors.green[600]);
+                  
+                } catch (e) {
+                  Navigator.pop(context);
+                  print('Error al guardar calificación: $e');
+                  _showSnackBar('❌ Error al guardar calificación: ${e.toString()}', Colors.red[600]);
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo[600]),
+              child: const Text('Guardar', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
       );
-
-      if (shouldOpen == true) {
-        // Abrir el archivo con un visor apropiado
-        await OpenFile.open(file.path).catchError((error) {
-          _showSnackBar('No se pudo abrir el archivo: $error', Colors.red[600]);
-        });
-      }
-    } else {
-      _showSnackBar('El archivo descargado está vacío o no existe', Colors.red[600]);
+    } catch (e) {
+      print('Error en _gradeAssignment: $e');
+      _showSnackBar('❌ Error al cargar datos de calificación: ${e.toString()}', Colors.red[600]);
     }
-  } catch (e) {
-    _showSnackBar('Error al descargar archivo: $e', Colors.red[600]);
   }
-}
-
-
+  
+  Future<void> _downloadFile(String resourceType, int resourceId, String filePath) async {
+    if (filePath == 'Sin archivo' || filePath.isEmpty || resourceId <= 0) {
+      _showSnackBar('No hay archivo disponible para descargar', Colors.red[600]);
+      return;
+    }
+    
+    try {
+      _showSnackBar('📥 Descargando archivo...', Colors.blue[600]);
+      
+      print('Descargando archivo:');
+      print('  Tipo: $resourceType');
+      print('  ID: $resourceId');
+      print('  Ruta: $filePath');
+      
+      // Primero verificar si el archivo existe en el servidor
+      try {
+        final fileExists = await _apiService.checkFileExists(
+          resourceType: resourceType,
+          resourceId: resourceId,
+          filePath: filePath,
+        );
+        
+        if (!fileExists) {
+          print('⚠️ El archivo no existe en el servidor según verificación');
+        } else {
+          print('✅ El archivo existe en el servidor');
+        }
+      } catch (e) {
+        print('⚠️ No se pudo verificar existencia del archivo: $e');
+      }
+      
+      // Usar el API service para descargar
+      final file = await _apiService.downloadFile(
+        resourceType: resourceType,
+        resourceId: resourceId,
+        filePath: filePath,
+      );
+      
+      if (file != null && await file.exists() && (await file.length() > 0)) {
+        print('✅ Archivo descargado: ${file.path} (${await file.length()} bytes)');
+        
+        final shouldOpen = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('✅ Descarga completada'),
+            content: Text('El archivo "${filePath.split('/').last}" se ha descargado correctamente. ¿Deseas abrirlo?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('No'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Sí'),
+              ),
+            ],
+          ),
+        );
+        
+        if (shouldOpen == true) {
+          print('Abriendo archivo...');
+          final result = await OpenFile.open(file.path);
+          if (result.type != ResultType.done) {
+            _showSnackBar('⚠️ No se pudo abrir el archivo automáticamente. Está en: ${file.path}', Colors.orange[600]);
+          }
+        }
+      } else {
+        print('❌ El archivo descargado está vacío o no existe');
+        _showSnackBar('❌ El archivo descargado está vacío o no existe', Colors.red[600]);
+      }
+    } catch (e) {
+      print('❌ Error al descargar archivo: $e');
+      print('Stack trace: ${e.toString()}');
+      
+      // Mostrar mensaje más específico
+      String errorMessage = 'Error al descargar archivo';
+      if (e.toString().contains('No such file') || e.toString().contains('404')) {
+        errorMessage = 'El archivo no existe en el servidor. Contacta al administrador.';
+      } else if (e.toString().contains('Connection') || e.toString().contains('Socket')) {
+        errorMessage = 'Error de conexión. Verifica tu internet.';
+      } else if (e.toString().contains('403')) {
+        errorMessage = 'No tienes permisos para descargar este archivo.';
+      } else if (e.toString().contains('500')) {
+        errorMessage = 'Error interno del servidor. Contacta al administrador.';
+      }
+      
+      _showSnackBar('❌ $errorMessage', Colors.red[600]);
+    }
+  }
 
   void _showTaskDetails(int taskIndex) {
+    if (taskIndex >= _assignments.length) return;
+    
     final task = _assignments[taskIndex];
     showDialog(
       context: context,
@@ -698,34 +839,83 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: Colors.white,
         title: Text(
-          task['titulo'] ?? task['title'] ?? 'Sin título',
-          style: TextStyle(color: Colors.indigo[900], fontSize: 20, fontWeight: FontWeight.bold),
+          task['title'] ?? 'Sin título',
+          style: TextStyle(color: Colors.indigo[900], fontWeight: FontWeight.bold),
         ),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Descripción:', style: TextStyle(color: Colors.indigo[700], fontSize: 16, fontWeight: FontWeight.w600)),
-              Text(task['description'] ?? task['descripcion'] ?? 'Sin descripción', style: TextStyle(color: Colors.indigo[900])),
-              const SizedBox(height: 8),
-              Text('Fecha de cierre:', style: TextStyle(color: Colors.indigo[700], fontSize: 16, fontWeight: FontWeight.w600)),
-              Text('${_formatDateTime(task['fecha_entrega'], null)} ${task['hora_cierre']}', style: TextStyle(color: Colors.indigo[900])),
-              const SizedBox(height: 8),
-              Text('Creador:', style: TextStyle(color: Colors.indigo[700], fontSize: 16, fontWeight: FontWeight.w600)),
-              Text(task['creator'] ?? task['creador'] ?? 'Desconocido', style: TextStyle(color: Colors.indigo[900])),
-              if (task['archivo_ruta'] != null && task['archivo_ruta'] != 'Sin archivo') ...[
-                const SizedBox(height: 8),
-                Text('Archivo adjunto:', style: TextStyle(color: Colors.indigo[700], fontSize: 16, fontWeight: FontWeight.w600)),
+              Text(
+                'Descripción:',
+                style: TextStyle(color: Colors.indigo[700], fontWeight: FontWeight.w600),
+              ),
+              Text(
+                task['description'] ?? 'Sin descripción',
+                style: TextStyle(color: Colors.indigo[900]),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Fecha de cierre:',
+                style: TextStyle(color: Colors.indigo[700], fontWeight: FontWeight.w600),
+              ),
+              Text(
+                '${_formatDateTime(task['due_date'], null)} ${task['due_time'] ?? "23:59"}',
+                style: TextStyle(color: Colors.indigo[900]),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Creador:',
+                style: TextStyle(color: Colors.indigo[700], fontWeight: FontWeight.w600),
+              ),
+              Text(
+                task['creator'] ?? 'Desconocido',
+                style: TextStyle(color: Colors.indigo[900]),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Estatus:',
+                style: TextStyle(color: Colors.indigo[700], fontWeight: FontWeight.w600),
+              ),
+              Text(
+                task['status'] ?? 'pending',
+                style: TextStyle(
+                  color: _getStatusColor(task['status']),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Entregas recibidas:',
+                style: TextStyle(color: Colors.indigo[700], fontWeight: FontWeight.w600),
+              ),
+              Text(
+                '${(task['deliveries'] as List?)?.length ?? 0} estudiantes',
+                style: TextStyle(color: Colors.indigo[900]),
+              ),
+              if (task['archivo_ruta'] != null && 
+                  task['archivo_ruta'].toString().isNotEmpty &&
+                  task['archivo_ruta'] != 'Sin archivo') ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Archivo adjunto:',
+                  style: TextStyle(color: Colors.indigo[700], fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
-                  onPressed: () => _downloadFile('tarea', task['id'], task['archivo_ruta']),
+                  onPressed: () {
+                    Navigator.pop(context); // Cerrar diálogo primero
+                    _downloadFile('tarea', task['id'], task['archivo_ruta']);
+                  },
                   icon: Icon(Icons.download, color: Colors.indigo[600]),
-                  label: Text('Descargar archivo', style: TextStyle(color: Colors.indigo[600])),
+                  label: Text(
+                    'Descargar ${task['archivo_ruta'].split('/').last}',
+                    style: TextStyle(color: Colors.indigo[600]),
+                  ),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: Colors.indigo[600]!),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   ),
                 ),
               ],
@@ -735,13 +925,12 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cerrar', style: TextStyle(color: Colors.indigo[600], fontSize: 16)),
+            child: Text('Cerrar', style: TextStyle(color: Colors.indigo[600])),
           ),
         ],
       ),
     );
   }
-  
 
   void _showSnackBar(String message, Color? backgroundColor) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -750,6 +939,7 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
         backgroundColor: backgroundColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -766,11 +956,25 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
   }
 
   Color _getStatusColor(String? status) {
-    return status == 'onTime' ? Colors.green[600]! : (status == 'late' ? Colors.orange[600]! : Colors.grey[400]!);
+    if (status == null) return Colors.grey[400]!;
+    final statusLower = status.toLowerCase();
+    
+    if (statusLower == 'entregado' || statusLower == 'delivered' || statusLower == 'ontime' || statusLower == 'a tiempo') {
+      return Colors.green[600]!;
+    } else if (statusLower == 'pendiente' || statusLower == 'pending') {
+      return Colors.orange[600]!;
+    } else if (statusLower == 'tarde' || statusLower == 'late') {
+      return Colors.red[600]!;
+    } else {
+      return Colors.grey[400]!;
+    }
   }
 
   Color _getGradeColor(dynamic grade) {
-    if (grade == null || grade == '') return Colors.grey[400]!;
+    if (grade == null || grade.toString().isEmpty || grade.toString().toLowerCase() == 'null' || grade == 'Sin calificar') {
+      return Colors.grey[400]!;
+    }
+    
     final doubleGrade = double.tryParse(grade.toString()) ?? 0.0;
     if (doubleGrade >= 90) return Colors.green[600]!;
     if (doubleGrade >= 70) return Colors.blue[600]!;
@@ -779,7 +983,7 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
   }
 
   String _formatDateTime(String? dateTimeStr, String? timeStr) {
-    if (dateTimeStr == null) return 'Sin fecha';
+    if (dateTimeStr == null || dateTimeStr.isEmpty) return 'Sin fecha';
     try {
       DateTime dateTime = DateTime.parse(dateTimeStr);
       return DateFormat('dd MMM yyyy').format(dateTime);
@@ -788,19 +992,100 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
     }
   }
 
-  List<Map<String, dynamic>> _filteredSubmissions(List<dynamic> submissions) {
-    final now = DateTime.now();
-    return submissions.where((submission) {
-      final deliveryDate = submission['fecha_entrega'] != null ? DateTime.parse(submission['fecha_entrega']) : now;
-      final taskDeadline = _assignments.firstWhere((task) => task['entregas'].contains(submission))['fecha_entrega'] != null
-          ? DateTime.parse('${_assignments.firstWhere((task) => task['entregas'].contains(submission))['fecha_entrega']} ${_assignments.firstWhere((task) => task['entregas'].contains(submission))['hora_cierre']}')
-          : now;
-      if (_filterStatus == 'Todos') return true;
-      if (_filterStatus == 'A tiempo') return deliveryDate.isBefore(taskDeadline) || deliveryDate.isAtSameMomentAs(taskDeadline);
-      if (_filterStatus == 'Tarde') return deliveryDate.isAfter(taskDeadline);
-      if (_filterStatus == 'Sin calificar') return submission['calificacion'] == null || submission['calificacion'] == '';
-      return true;
-    }).cast<Map<String, dynamic>>().toList();
+  List<Map<String, dynamic>> _filteredSubmissions(List<dynamic> submissions, int taskIndex) {
+    if (taskIndex >= _assignments.length) return [];
+    
+    final task = _assignments[taskIndex];
+    final filtered = <Map<String, dynamic>>[];
+    
+    for (var submission in submissions) {
+      try {
+        final submissionMap = submission as Map<String, dynamic>;
+        final fechaEntregaStr = submissionMap['fecha_entrega']?.toString();
+        final calificacion = submissionMap['calificacion'];
+        
+        if (_filterStatus == 'Todos') {
+          filtered.add(submissionMap);
+          continue;
+        }
+        
+        // Para filtros que necesitan fecha
+        if (fechaEntregaStr != null && fechaEntregaStr.isNotEmpty) {
+          try {
+            final deliveryDate = DateTime.parse(fechaEntregaStr);
+            final taskFecha = task['due_date']?.toString() ?? '';
+            final taskHora = task['due_time']?.toString() ?? '23:59:59';
+            final deadlineStr = '$taskFecha $taskHora';
+            
+            final taskDeadlineDate = DateTime.tryParse(deadlineStr) ?? 
+                DateTime.now().add(const Duration(days: 365));
+            
+            if (_filterStatus == 'A tiempo' && 
+                (deliveryDate.isBefore(taskDeadlineDate) || 
+                 deliveryDate.isAtSameMomentAs(taskDeadlineDate))) {
+              filtered.add(submissionMap);
+              continue;
+            }
+            
+            if (_filterStatus == 'Tarde' && deliveryDate.isAfter(taskDeadlineDate)) {
+              filtered.add(submissionMap);
+              continue;
+            }
+          } catch (e) {
+            print('Error parseando fechas para filtro: $e');
+          }
+        }
+        
+        if (_filterStatus == 'Sin calificar') {
+          final isUncalified = calificacion == null || 
+                               calificacion.toString().isEmpty || 
+                               calificacion.toString().toLowerCase() == 'null' ||
+                               calificacion == 'Sin calificar';
+          if (isUncalified) {
+            filtered.add(submissionMap);
+          }
+        }
+        
+      } catch (e) {
+        print('Error al filtrar entrega: $e');
+      }
+    }
+    
+    return filtered;
+  }
+
+  void _printDebugInfo() {
+    print('=== DEBUG INFO ===');
+    print('Número de tareas: ${_assignments.length}');
+    for (int i = 0; i < _assignments.length; i++) {
+      final task = _assignments[i];
+      print('\nTarea $i: ${task['title']}');
+      print('  ID: ${task['id']}');
+      print('  Status: ${task['status']}');
+      print('  Fecha entrega: ${task['due_date']}');
+      print('  Hora cierre: ${task['due_time']}');
+      print('  Archivo: ${task['archivo_ruta']}');
+      
+      final entregas = task['deliveries'] as List<dynamic>? ?? [];
+      print('  Número de entregas: ${entregas.length}');
+      
+      for (int j = 0; j < entregas.length; j++) {
+        final entrega = entregas[j] as Map<String, dynamic>;
+        print('    Entrega $j:');
+        print('      Alumno: ${entrega['alumno']}');
+        print('      ID Alumno: ${entrega['id_alumno']}');
+        print('      Calificación: ${entrega['calificacion']}');
+        print('      Observaciones: ${entrega['observaciones']}');
+        print('      Fecha entrega: ${entrega['fecha_entrega']}');
+        print('      ID Entrega: ${entrega['id_entrega']}');
+        print('      Archivo: ${entrega['archivo_ruta']}');
+      }
+    }
+    print('\nNúmero de avisos: ${_announcements.length}');
+    for (var aviso in _announcements) {
+      print('  Aviso: ${aviso['titulo']} - ${aviso['usuario']}');
+    }
+    print('=================\n');
   }
 
   @override
@@ -848,18 +1133,13 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
               onNotification: (scrollNotification) {
                 if (scrollNotification is ScrollUpdateNotification && widget.navBarVisibilityNotifier != null) {
                   final currentOffset = scrollNotification.metrics.pixels;
-                  
                   if (currentOffset > _lastScrollOffset + 15 && widget.navBarVisibilityNotifier!.value) {
-                    // Scroll hacia abajo - ocultar navbar
                     widget.navBarVisibilityNotifier!.value = false;
                   } else if (currentOffset < _lastScrollOffset - 8 && !widget.navBarVisibilityNotifier!.value && currentOffset > 0) {
-                    // Scroll hacia arriba - mostrar navbar
                     widget.navBarVisibilityNotifier!.value = true;
                   } else if (currentOffset <= 0 && !widget.navBarVisibilityNotifier!.value) {
-                    // Llegamos al top - mostrar navbar
                     widget.navBarVisibilityNotifier!.value = true;
                   }
-                  
                   _lastScrollOffset = currentOffset;
                 }
                 return false;
@@ -888,7 +1168,6 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                               TextField(
                                 controller: _titleController,
                                 decoration: _inputDecoration('Título de la tarea', Icons.title),
-                                onChanged: (value) => setState(() {}),
                               ),
                               const SizedBox(height: 16),
                               TextField(
@@ -911,25 +1190,39 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'Subir archivo PDF (opcional)',
+                                'Subir archivo (opcional)',
                                 style: TextStyle(color: Colors.indigo[700], fontSize: 14, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 8),
                               OutlinedButton.icon(
-                                onPressed: () {
-                                  // Lógica para subir archivo PDF
-                                },
-                                icon: Icon(Icons.upload, color: Colors.indigo[600]),
+                                onPressed: _pickFile,
+                                icon: Icon(
+                                  _selectedFile == null ? Icons.upload : Icons.check_circle,
+                                  color: _selectedFile == null ? Colors.indigo[600] : Colors.green[600],
+                                ),
                                 label: Text(
                                   _selectedFile == null ? 'Seleccionar archivo' : 'Archivo seleccionado',
-                                  style: TextStyle(color: Colors.indigo[600]),
+                                  style: TextStyle(
+                                    color: _selectedFile == null ? Colors.indigo[600] : Colors.green[600],
+                                    fontWeight: _selectedFile == null ? FontWeight.normal : FontWeight.bold,
+                                  ),
                                 ),
                                 style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: Colors.indigo[600]!),
+                                  side: BorderSide(
+                                    color: _selectedFile == null ? Colors.indigo[600]! : Colors.green[600]!,
+                                  ),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
                               ),
+                              if (_selectedFile != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${_selectedFile!.path.split('/').last}',
+                                  style: TextStyle(color: Colors.green[700], fontSize: 12),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
                               const SizedBox(height: 24),
                               SizedBox(
                                 width: double.infinity,
@@ -992,12 +1285,21 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                                           child: Icon(Icons.assignment, color: Colors.indigo[600], size: 24),
                                         ),
                                         title: Text(
-                                          task['titulo'] ?? 'Sin título',
+                                          task['title'] ?? 'Sin título',
                                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.indigo[900]),
                                         ),
-                                        subtitle: Text(
-                                          'Entrega: ${_formatDateTime(task['fecha_entrega'], null)} ${task['hora_cierre']}',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                                        subtitle: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Entrega: ${_formatDateTime(task['due_date'], null)} ${task['due_time']}',
+                                              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                                            ),
+                                            Text(
+                                              'Entregas: ${(task['deliveries'] as List?)?.length ?? 0} estudiantes',
+                                              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                                            ),
+                                          ],
                                         ),
                                         trailing: Row(
                                           mainAxisSize: MainAxisSize.min,
@@ -1036,18 +1338,13 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                     onNotification: (scrollNotification) {
                       if (scrollNotification is ScrollUpdateNotification && widget.navBarVisibilityNotifier != null) {
                         final currentOffset = scrollNotification.metrics.pixels;
-                        
                         if (currentOffset > _lastScrollOffset + 15 && widget.navBarVisibilityNotifier!.value) {
-                          // Scroll hacia abajo - ocultar navbar
                           widget.navBarVisibilityNotifier!.value = false;
                         } else if (currentOffset < _lastScrollOffset - 8 && !widget.navBarVisibilityNotifier!.value && currentOffset > 0) {
-                          // Scroll hacia arriba - mostrar navbar
                           widget.navBarVisibilityNotifier!.value = true;
                         } else if (currentOffset <= 0 && !widget.navBarVisibilityNotifier!.value) {
-                          // Llegamos al top - mostrar navbar
                           widget.navBarVisibilityNotifier!.value = true;
                         }
-                        
                         _lastScrollOffset = currentOffset;
                       }
                       return false;
@@ -1058,169 +1355,205 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: DropdownButton<String>(
-                              value: _filterStatus,
-                              isExpanded: true,
-                              items: _statusFilters.map((String status) {
-                                return DropdownMenuItem<String>(
-                                  value: status,
-                                  child: Text(status, style: TextStyle(color: Colors.indigo[900], fontSize: 16)),
-                                );
-                              }).toList(),
-                              onChanged: (String? newValue) {
-                                setState(() => _filterStatus = newValue!);
-                              },
-                              underline: Container(height: 1, color: Colors.indigo[200]),
-                              icon: Icon(Icons.filter_list, color: Colors.indigo[600]),
-                              style: TextStyle(color: Colors.indigo[900], fontSize: 16),
-                              dropdownColor: Colors.white,
+                            child: Row(
+                              children: [
+                                const Icon(Icons.filter_list, color: Colors.indigo),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: DropdownButton<String>(
+                                    value: _filterStatus,
+                                    isExpanded: true,
+                                    items: _statusFilters.map((String status) {
+                                      return DropdownMenuItem<String>(
+                                        value: status,
+                                        child: Text(status),
+                                      );
+                                    }).toList(),
+                                    onChanged: (String? newValue) {
+                                      setState(() => _filterStatus = newValue!);
+                                    },
+                                    underline: Container(height: 1, color: Colors.indigo[200]),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                        SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, assignmentIndex) {
-                              if (_assignments.isEmpty) {
-                                return Container(
-                                  height: MediaQuery.of(context).size.height - 200,
-                                  alignment: Alignment.center,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.assignment_outlined, size: 60, color: Colors.indigo[300]),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'No hay tareas asignadas',
-                                        style: TextStyle(fontSize: 18, color: Colors.indigo[600], fontWeight: FontWeight.w600),
-                                      ),
-                                    ],
+                        if (_assignments.isEmpty)
+                          SliverFillRemaining(
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.assignment_outlined, size: 60, color: Colors.indigo[300]),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No hay tareas asignadas',
+                                    style: TextStyle(fontSize: 18, color: Colors.indigo[600], fontWeight: FontWeight.w600),
                                   ),
-                                );
-                              }
-
-                              final assignment = _assignments[assignmentIndex];
-                              final filteredSubmissions = _filteredSubmissions(assignment['entregas'] ?? []);
-                              return FadeTransition(
-                                opacity: _fadeAnimation,
-                                child: Card(
-                                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  elevation: 2,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  color: Colors.white,
-                                  child: ExpansionTile(
-                                    backgroundColor: Colors.white,
-                                    collapsedBackgroundColor: Colors.white,
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, assignmentIndex) {
+                                final assignment = _assignments[assignmentIndex];
+                                final filteredSubmissions = _filteredSubmissions(assignment['deliveries'] ?? [], assignmentIndex);
+                                
+                                return FadeTransition(
+                                  opacity: _fadeAnimation,
+                                  child: Card(
+                                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    elevation: 2,
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    leading: CircleAvatar(
-                                      backgroundColor: Colors.indigo[100],
-                                      child: Icon(Icons.assignment, color: Colors.indigo[600], size: 24),
-                                    ),
-                                    title: Text(
-                                      assignment['titulo'] ?? 'Sin título',
-                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.indigo[900]),
-                                    ),
-                                    subtitle: Text(
-                                      'Entrega: ${_formatDateTime(assignment['fecha_entrega'], null)} ${assignment['hora_cierre']}',
-                                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                                    ),
-                                    trailing: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.indigo[600]!.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(10),
+                                    color: Colors.white,
+                                    child: ExpansionTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor: Colors.indigo[100],
+                                        child: Icon(Icons.assignment, color: Colors.indigo[600]),
                                       ),
-                                      child: Text(
-                                        '${filteredSubmissions.length}',
-                                        style: TextStyle(color: Colors.indigo[600], fontSize: 14, fontWeight: FontWeight.bold),
+                                      title: Text(
+                                        assignment['title'] ?? 'Sin título', 
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo[900]),
                                       ),
-                                    ),
-                                    children: [
-                                      if (filteredSubmissions.isEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.all(16),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Icon(Icons.info_outline, color: Colors.grey[400]),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                'No hay entregas aún',
-                                                style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                                              ),
-                                            ],
-                                          ),
-                                        )
-                                      else
-                                        ...filteredSubmissions.map((submission) {
-                                          final submissionIndex = (assignment['entregas'] ?? []).indexOf(submission);
-                                          final isOnTime = submission['status'] == 'onTime';
-                                          return SlideTransition(
-                                            position: _slideAnimation,
-                                            child: Container(
+                                      subtitle: Text(
+                                        'Entrega: ${_formatDateTime(assignment['due_date'], null)} ${assignment['due_time']}',
+                                      ),
+                                      trailing: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.indigo[600]!.withOpacity(0.2), 
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          '${filteredSubmissions.length}',
+                                          style: TextStyle(color: Colors.indigo[600], fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      children: [
+                                        if (filteredSubmissions.isEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.all(16),
+                                            child: Text(
+                                              _filterStatus == 'Todos' 
+                                                ? 'No hay entregas para esta tarea'
+                                                : 'No hay entregas con el filtro "$_filterStatus"',
+                                              style: TextStyle(color: Colors.grey[600]),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          )
+                                        else
+                                          ...filteredSubmissions.asMap().entries.map((entry) {
+                                            final submissionIndex = entry.key;
+                                            final submission = entry.value;
+                                            
+                                            final fechaEntregaStr = submission['fecha_entrega']?.toString();
+                                            DateTime? fechaEntrega;
+                                            if (fechaEntregaStr != null && fechaEntregaStr.isNotEmpty) {
+                                              try {
+                                                fechaEntrega = DateTime.parse(fechaEntregaStr);
+                                              } catch (e) {
+                                                print('Error parseando fecha entrega: $e');
+                                              }
+                                            }
+                                            
+                                            final taskFecha = assignment['due_date']?.toString() ?? '';
+                                            final taskHora = assignment['due_time']?.toString() ?? '23:59:59';
+                                            final deadlineStr = '$taskFecha $taskHora';
+                                            final taskDeadlineDate = DateTime.tryParse(deadlineStr);
+                                            
+                                            bool isOnTime = false;
+                                            if (fechaEntrega != null && taskDeadlineDate != null) {
+                                              isOnTime = fechaEntrega.isBefore(taskDeadlineDate) || 
+                                                         fechaEntrega.isAtSameMomentAs(taskDeadlineDate);
+                                            }
+                                            
+                                            return Container(
                                               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                               decoration: BoxDecoration(
                                                 color: isOnTime ? Colors.green[50] : Colors.orange[50],
                                                 borderRadius: BorderRadius.circular(12),
                                                 border: Border.all(
                                                   color: isOnTime ? Colors.green[200]! : Colors.orange[200]!,
-                                                  width: 1,
                                                 ),
                                               ),
                                               child: ListTile(
-                                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                leading: CircleAvatar(
+                                                  backgroundColor: Colors.indigo[100],
+                                                  child: Text(
+                                                    (submission['alumno'] ?? 'E').substring(0, 1).toUpperCase(),
+                                                    style: TextStyle(color: Colors.indigo[600]),
+                                                  ),
+                                                ),
                                                 title: Text(
-                                                  submission['alumno'] ?? 'Desconocido',
-                                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.indigo[900]),
+                                                  submission['alumno'] ?? 'Desconocido', 
+                                                  style: TextStyle(fontWeight: FontWeight.w600),
                                                 ),
                                                 subtitle: Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      'Entregado: ${_formatDateTime(submission['fecha_entrega'], null)}',
-                                                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                                                    ),
+                                                    if (fechaEntrega != null)
+                                                      Text(
+                                                        'Entregado: ${DateFormat('dd MMM yyyy HH:mm').format(fechaEntrega)}',
+                                                        style: TextStyle(fontSize: 12),
+                                                      ),
                                                     const SizedBox(height: 4),
                                                     Row(
                                                       children: [
                                                         Container(
                                                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                           decoration: BoxDecoration(
-                                                            color: _getStatusColor(submission['status']).withOpacity(0.2),
+                                                            color: isOnTime ? Colors.green[100]! : Colors.orange[100]!, 
                                                             borderRadius: BorderRadius.circular(8),
                                                           ),
                                                           child: Text(
-                                                            isOnTime ? 'A tiempo' : 'Tarde',
+                                                            isOnTime ? 'A tiempo' : 'Tarde', 
                                                             style: TextStyle(
-                                                              color: _getStatusColor(submission['status']),
-                                                              fontSize: 12,
+                                                              color: isOnTime ? Colors.green[800] : Colors.orange[800], 
                                                               fontWeight: FontWeight.bold,
+                                                              fontSize: 12,
                                                             ),
                                                           ),
                                                         ),
-                                                        if (submission['calificacion'] != null && submission['calificacion'] != '') ...[
-                                                          const SizedBox(width: 8),
-                                                          Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                                            decoration: BoxDecoration(
-                                                              color: _getGradeColor(submission['calificacion']),
-                                                              borderRadius: BorderRadius.circular(12),
-                                                            ),
-                                                            child: Text(
-                                                              (double.tryParse(submission['calificacion'].toString()) ?? 0.0).toStringAsFixed(0),
-                                                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                                        if (submission['calificacion'] != null && 
+                                                            submission['calificacion'].toString().isNotEmpty &&
+                                                            submission['calificacion'].toString().toLowerCase() != 'null' &&
+                                                            submission['calificacion'] != 'Sin calificar')
+                                                          Padding(
+                                                            padding: const EdgeInsets.only(left: 8),
+                                                            child: Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                                              decoration: BoxDecoration(
+                                                                color: _getGradeColor(submission['calificacion']), 
+                                                                borderRadius: BorderRadius.circular(12),
+                                                              ),
+                                                              child: Text(
+                                                                (double.tryParse(submission['calificacion'].toString()) ?? 0.0)
+                                                                    .toStringAsFixed(0),
+                                                                style: const TextStyle(
+                                                                  color: Colors.white, 
+                                                                  fontWeight: FontWeight.bold,
+                                                                  fontSize: 12,
+                                                                ),
+                                                              ),
                                                             ),
                                                           ),
-                                                        ],
                                                       ],
                                                     ),
-                                                    if (submission['observaciones'] != null && submission['observaciones'].isNotEmpty) ...[
-                                                      const SizedBox(height: 4),
-                                                      Text(
-                                                        '"${submission['observaciones']}"',
-                                                        style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey[600], fontSize: 14),
+                                                    if (submission['observaciones'] != null && 
+                                                        submission['observaciones'].toString().isNotEmpty &&
+                                                        submission['observaciones'] != 'Sin observaciones')
+                                                      Padding(
+                                                        padding: const EdgeInsets.only(top: 4),
+                                                        child: Text(
+                                                          '"${submission['observaciones']}"', 
+                                                          style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+                                                          maxLines: 2,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
                                                       ),
-                                                    ],
                                                   ],
                                                 ),
                                                 trailing: Row(
@@ -1228,38 +1561,39 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                                                   children: [
                                                     IconButton(
                                                       icon: Icon(
-                                                        (submission['calificacion'] == null || submission['calificacion'] == '')
-                                                            ? Icons.grading
-                                                            : Icons.edit,
+                                                        (submission['calificacion'] == null || 
+                                                         submission['calificacion'].toString().isEmpty ||
+                                                         submission['calificacion'] == 'Sin calificar') 
+                                                          ? Icons.grading 
+                                                          : Icons.edit, 
                                                         color: Colors.indigo[600],
-                                                        size: 24,
                                                       ),
                                                       onPressed: () => _gradeAssignment(assignmentIndex, submissionIndex),
-                                                      tooltip: (submission['calificacion'] == null || submission['calificacion'] == '')
-                                                          ? 'Calificar'
-                                                          : 'Editar calificación',
                                                     ),
-                                                    if (submission['archivo_ruta'] != null && submission['archivo_ruta'] != 'Sin archivo')
+                                                    if (submission['archivo_ruta'] != null && 
+                                                        submission['archivo_ruta'].toString().isNotEmpty &&
+                                                        submission['archivo_ruta'] != 'Sin archivo')
                                                       IconButton(
-                                                        icon: Icon(Icons.download, color: Colors.blue[600], size: 24),
-                                                        onPressed: () => _downloadFile('entrega', submission['id_entrega'], submission['archivo_ruta']),
-                                                        tooltip: 'Descargar entrega',
+                                                        icon: Icon(Icons.download, color: Colors.blue[600]),
+                                                        onPressed: () => _downloadFile(
+                                                          'entrega', 
+                                                          submission['id_entrega'] ?? 0, 
+                                                          submission['archivo_ruta'],
+                                                        ),
                                                       ),
                                                   ],
                                                 ),
                                               ),
-                                            ),
-                                          );
-                                        }).toList(),
-                                      const SizedBox(height: 8),
-                                    ],
+                                            );
+                                          }).toList(),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                            childCount: _assignments.isEmpty ? 1 : _assignments.length,
+                                );
+                              },
+                              childCount: _assignments.isEmpty ? 0 : _assignments.length,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -1271,18 +1605,13 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                     onNotification: (scrollNotification) {
                       if (scrollNotification is ScrollUpdateNotification && widget.navBarVisibilityNotifier != null) {
                         final currentOffset = scrollNotification.metrics.pixels;
-                        
                         if (currentOffset > _lastScrollOffset + 15 && widget.navBarVisibilityNotifier!.value) {
-                          // Scroll hacia abajo - ocultar navbar
                           widget.navBarVisibilityNotifier!.value = false;
                         } else if (currentOffset < _lastScrollOffset - 8 && !widget.navBarVisibilityNotifier!.value && currentOffset > 0) {
-                          // Scroll hacia arriba - mostrar navbar
                           widget.navBarVisibilityNotifier!.value = true;
                         } else if (currentOffset <= 0 && !widget.navBarVisibilityNotifier!.value) {
-                          // Llegamos al top - mostrar navbar
                           widget.navBarVisibilityNotifier!.value = true;
                         }
-                        
                         _lastScrollOffset = currentOffset;
                       }
                       return false;
@@ -1304,21 +1633,19 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                                 child: Column(
                                   children: [
                                     Text(
-                                      'Nuevo Aviso',
+                                      'Nuevo Aviso', 
                                       style: TextStyle(color: Colors.indigo[900], fontSize: 22, fontWeight: FontWeight.bold),
                                     ),
                                     const SizedBox(height: 20),
                                     TextField(
-                                      controller: _announcementTitleController,
+                                      controller: _announcementTitleController, 
                                       decoration: _inputDecoration('Título del aviso', Icons.title),
-                                      onChanged: (value) => setState(() {}),
                                     ),
                                     const SizedBox(height: 16),
                                     TextField(
-                                      controller: _announcementTextController,
-                                      maxLines: 4,
+                                      controller: _announcementTextController, 
+                                      maxLines: 4, 
                                       decoration: _inputDecoration('Texto del aviso', Icons.announcement),
-                                      onChanged: (value) => setState(() {}),
                                     ),
                                     const SizedBox(height: 24),
                                     SizedBox(
@@ -1326,12 +1653,12 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                                       child: ElevatedButton(
                                         onPressed: _createAnnouncement,
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.indigo[600],
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          backgroundColor: Colors.indigo[600], 
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
                                           padding: const EdgeInsets.symmetric(vertical: 16),
                                         ),
                                         child: const Text(
-                                          'Publicar Aviso',
+                                          'Publicar Aviso', 
                                           style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
                                         ),
                                       ),
@@ -1343,22 +1670,19 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                           ),
                           const SizedBox(height: 24),
                           Text(
-                            'Avisos Publicados',
+                            'Avisos Publicados', 
                             style: TextStyle(color: Colors.indigo[900], fontSize: 20, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 16),
                           if (_announcements.isEmpty)
-                            Container(
-                              height: MediaQuery.of(context).size.height - 300,
-                              alignment: Alignment.center,
+                            Center(
                               child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(Icons.announcement_outlined, size: 60, color: Colors.indigo[300]),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'No hay avisos publicados',
-                                    style: TextStyle(fontSize: 18, color: Colors.indigo[600], fontWeight: FontWeight.w600),
+                                    'No hay avisos publicados', 
+                                    style: TextStyle(fontSize: 18, color: Colors.indigo[600]),
                                   ),
                                 ],
                               ),
@@ -1367,54 +1691,59 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                             ..._announcements.asMap().entries.map((entry) {
                               final index = entry.key;
                               final announcement = entry.value;
+                              
+                              String fechaHora = '';
+                              if (announcement['fecha_hora'] != null && announcement['fecha_hora'].toString().isNotEmpty) {
+                                try {
+                                  final fecha = DateTime.parse(announcement['fecha_hora'].toString());
+                                  fechaHora = DateFormat('dd MMM yyyy HH:mm').format(fecha);
+                                } catch (e) {
+                                  fechaHora = announcement['fecha_hora'].toString();
+                                }
+                              }
+                              
                               return FadeTransition(
                                 opacity: _fadeAnimation,
                                 child: Card(
-                                  margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                                  margin: const EdgeInsets.symmetric(vertical: 8),
                                   elevation: 2,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                   color: Colors.white,
                                   child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                     leading: CircleAvatar(
-                                      backgroundColor: Colors.indigo[100],
-                                      child: Icon(Icons.announcement, color: Colors.indigo[600], size: 24),
+                                      backgroundColor: Colors.indigo[100], 
+                                      child: Icon(Icons.announcement, color: Colors.indigo[600]),
                                     ),
                                     title: Text(
-                                      announcement['titulo'] ?? 'Sin título',
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.indigo[900]),
+                                      announcement['titulo'] ?? 'Sin título', 
+                                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.indigo[900]),
                                     ),
                                     subtitle: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        Text(announcement['texto'] ?? ''),
                                         const SizedBox(height: 4),
                                         Text(
-                                          announcement['texto'] ?? '',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Publicado por: ${announcement['usuario'] ?? 'Desconocido'}',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                                          'Por: ${announcement['usuario'] ?? 'Desconocido'}', 
+                                          style: TextStyle(color: Colors.grey[600]),
                                         ),
                                         Text(
-                                          'Fecha: ${_formatDateTime(announcement['fecha_hora'], null)}',
-                                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                                          'Fecha: $fechaHora', 
+                                          style: TextStyle(color: Colors.grey[600]),
                                         ),
                                       ],
                                     ),
+                                    isThreeLine: true,
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         IconButton(
-                                          icon: Icon(Icons.edit, color: Colors.indigo[600], size: 24),
+                                          icon: Icon(Icons.edit, color: Colors.indigo[600]), 
                                           onPressed: () => _editAnnouncement(index),
-                                          tooltip: 'Editar aviso',
                                         ),
                                         IconButton(
-                                          icon: Icon(Icons.delete, color: Colors.red[600], size: 24),
+                                          icon: Icon(Icons.delete, color: Colors.red[600]), 
                                           onPressed: () => _deleteAnnouncement(index),
-                                          tooltip: 'Eliminar aviso',
                                         ),
                                       ],
                                     ),
@@ -1428,6 +1757,19 @@ Future<void> _downloadFile(String resourceType, int resourceId, String fileUrl) 
                   ),
           ],
         ),
+        floatingActionButton: _currentTab == 0 && _assignments.isNotEmpty
+            ? FloatingActionButton(
+                onPressed: () {
+                  _tab1ScrollController.animateTo(
+                    0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                },
+                backgroundColor: Colors.indigo[600],
+                child: const Icon(Icons.arrow_upward, color: Colors.white),
+              )
+            : null,
       ),
     );
   }

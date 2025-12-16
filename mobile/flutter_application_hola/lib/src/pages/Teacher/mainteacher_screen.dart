@@ -1,3 +1,5 @@
+// mainteacher_screen.dart - VERSIÓN CORREGIDA Y FUNCIONAL (no se queda cargando)
+
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -11,11 +13,9 @@ import 'package:flutter_application_hola/src/services/api_service.dart';
 
 class MainTeacherScreen extends StatefulWidget {
   const MainTeacherScreen({super.key});
-  
 
   @override
   State<MainTeacherScreen> createState() => _MainTeacherScreenState();
-  
 }
 
 class _MainTeacherScreenState extends State<MainTeacherScreen> {
@@ -27,7 +27,7 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
   String? _errorMessage;
   bool _isNavBarVisible = true;
   double _lastScrollOffset = 0;
-  
+
   // ValueNotifier para controlar la visibilidad de la barra de navegación
   final ValueNotifier<bool> _navBarVisibilityNotifier = ValueNotifier<bool>(true);
 
@@ -37,7 +37,7 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
     NavItem(index: 0, icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Inicio'),
     NavItem(index: 1, icon: Icons.calendar_today_outlined, activeIcon: Icons.calendar_today, label: 'Agenda'),
     NavItem(index: 2, icon: Icons.inventory_2_outlined, activeIcon: Icons.inventory_2, label: 'Inventario'),
-    NavItem(index: 3, icon: Icons.assignment_outlined, activeIcon: Icons.assignment, label: 'Asignar')
+    NavItem(index: 3, icon: Icons.assignment_outlined, activeIcon: Icons.assignment, label: 'Asignar'),
   ];
 
   @override
@@ -54,7 +54,6 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
   }
 
   void _setupNavBarListener() {
-    // Escuchar cambios en la visibilidad de la barra de navegación
     _navBarVisibilityNotifier.addListener(() {
       if (_navBarVisibilityNotifier.value != _isNavBarVisible) {
         setState(() {
@@ -70,47 +69,45 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
     try {
       await ApiService.initSession();
       final userId = ApiService.currentUserId;
-      if (userId != null) {
-        final user = await ApiService.getUsuarioById(userId);
-        if (user != null) {
-          setState(() {
-            _userId = userId;
-            _userRole = user.rol;
-            _isUserDataInitialized = true;
-            _isLocaleInitialized = true;
-            _screens = [
-              TeacherHomeScreen(
-                userId: userId,
-                userRole: user.rol,
-              ),
-              ScheduleScreen(
-                userId: userId,
-                userRole: user.rol,
-              ),
-              const TeacherInventoryScreen(),
-              // Quitamos el parámetro navBarVisibilityNotifier temporalmente
-              ProfessionalTaskManagementScreen(
-                userId: userId,
-                userRole: user.rol,
-              ),
-              const TeacheralumScreen(),
-            ];
-          });
-        } else {
-          setState(() {
-            _errorMessage = 'Usuario no encontrado';
-            _isLocaleInitialized = true;
-          });
-        }
-      } else {
+
+      if (userId == null) {
         setState(() {
           _errorMessage = 'No hay sesión activa. Por favor inicia sesión.';
           _isLocaleInitialized = true;
         });
+        return;
       }
-    } catch (e) {
+
+      // Obtenemos los datos del usuario - getUsuarioById ahora es seguro (sin header auth)
+      final user = await ApiService.getUsuarioById(userId);
+
       setState(() {
-        _errorMessage = 'Error al cargar datos: $e';
+        _userId = userId;
+        _userRole = user?.rol ?? 'docente'; // Fallback seguro si user es null
+        _isUserDataInitialized = true;
+        _isLocaleInitialized = true;
+
+        _screens = [
+          TeacherHomeScreen(
+            userId: userId,
+            userRole: _userRole!,
+          ),
+          ScheduleScreen(
+            userId: userId,
+            userRole: _userRole!,
+          ),
+          const TeacherInventoryScreen(),
+          ProfessionalTaskManagementScreen(
+            userId: userId,
+            userRole: _userRole!,
+          ),
+          const TeacheralumScreen(),
+        ];
+      });
+    } catch (e) {
+      print('Error al inicializar datos del docente: $e');
+      setState(() {
+        _errorMessage = 'Error al cargar datos del usuario. Intenta cerrar sesión y volver a entrar.';
         _isLocaleInitialized = true;
       });
     }
@@ -118,6 +115,7 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Pantalla de carga mientras inicializa
     if (!_isLocaleInitialized || !_isUserDataInitialized) {
       return const Scaffold(
         body: Center(
@@ -128,6 +126,7 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
       );
     }
 
+    // Pantalla de error
     if (_errorMessage != null) {
       return Scaffold(
         body: Center(
@@ -140,14 +139,17 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
                 color: Colors.red[600],
               ),
               const SizedBox(height: 16),
-              Text(
-                _errorMessage!,
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.red[600],
-                  fontWeight: FontWeight.w600,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  _errorMessage!,
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.red[600],
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               ElevatedButton(
@@ -176,34 +178,32 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
       );
     }
 
+    // Pantalla principal
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: Stack(
         children: [
-          // Pantalla principal con NotificationListener global
+          // Pantalla actual con listener global de scroll
           NotificationListener<ScrollNotification>(
             onNotification: (scrollNotification) {
               if (scrollNotification is ScrollUpdateNotification) {
                 final currentOffset = scrollNotification.metrics.pixels;
-                
+
                 if (currentOffset > _lastScrollOffset + 15 && _isNavBarVisible) {
-                  // Scroll hacia abajo - ocultar navbar
                   _navBarVisibilityNotifier.value = false;
                 } else if (currentOffset < _lastScrollOffset - 8 && !_isNavBarVisible && currentOffset > 0) {
-                  // Scroll hacia arriba - mostrar navbar
                   _navBarVisibilityNotifier.value = true;
                 } else if (currentOffset <= 0 && !_isNavBarVisible) {
-                  // Llegamos al top - mostrar navbar
                   _navBarVisibilityNotifier.value = true;
                 }
-                
+
                 _lastScrollOffset = currentOffset;
               }
               return false;
             },
             child: _screens[_currentIndex],
           ),
-          
+
           // Barra de navegación flotante
           Positioned(
             left: 16,
@@ -282,11 +282,10 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
 
   Widget _buildFloatingNavItem(NavItem item) {
     final isSelected = _currentIndex == item.index;
-    
+
     return GestureDetector(
       onTap: () {
         setState(() => _currentIndex = item.index);
-        // Asegurarse de que la barra sea visible al cambiar de pestaña
         _navBarVisibilityNotifier.value = true;
       },
       child: AnimatedContainer(
@@ -294,7 +293,7 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          gradient: isSelected 
+          gradient: isSelected
               ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -315,14 +314,13 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Indicador de selección animado - SOLO COLOR INDIGO
             AnimatedContainer(
               duration: const Duration(milliseconds: 400),
               curve: Curves.easeInOut,
               height: 3,
               width: isSelected ? 28 : 0,
               decoration: BoxDecoration(
-                color: Colors.indigo, // Solo color indigo, sin gradiente
+                color: Colors.indigo,
                 borderRadius: BorderRadius.circular(2),
                 boxShadow: [
                   BoxShadow(
@@ -334,7 +332,6 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
               ),
             ),
             const SizedBox(height: 6),
-            // Icono con animación de escala
             AnimatedScale(
               duration: const Duration(milliseconds: 300),
               scale: isSelected ? 1.15 : 1.0,
@@ -345,7 +342,6 @@ class _MainTeacherScreenState extends State<MainTeacherScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            // Texto con animación de opacidad
             AnimatedOpacity(
               duration: const Duration(milliseconds: 300),
               opacity: isSelected ? 1.0 : 0.8,

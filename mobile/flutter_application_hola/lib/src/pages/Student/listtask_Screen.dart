@@ -29,6 +29,18 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
   void initState() {
     super.initState();
     _loadTasks();
+    
+    // Añadir listener para debug
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _debugCurrentState();
+    });
+  }
+
+  void _debugCurrentState() {
+    print('=== DEBUG ListTaskScreen ===');
+    print('  User ID: ${widget.userId}');
+    print('  User Role: ${widget.userRole}');
+    print('  Current Filter: $_currentFilter');
   }
 
   Future<void> _loadTasks() async {
@@ -38,21 +50,34 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
     });
 
     try {
+      print('=== Loading tasks for user ${widget.userId} ===');
+      
       final tasksData = await _apiService.displayTasks(
         userId: widget.userId,
         userRole: widget.userRole,
       );
 
-      print('Datos de tareas recibidos: ${tasksData.length} tareas');
+      print('✅ Datos de tareas recibidos: ${tasksData.length} tareas');
+      
+      for (var task in tasksData) {
+        print('Task ID: ${task['id']}, Title: ${task['titulo']}');
+        print('  Status: ${task['status']}');
+        print('  Deliveries: ${task['entregas']?.length ?? 0}');
+        if (task['entregas'] != null && task['entregas'].isNotEmpty) {
+          print('  First delivery: ${task['entregas'][0]}');
+        }
+      }
 
       final taskGroups = _organizeTasksByDate(tasksData);
+      
+      print('✅ Task groups organized: ${taskGroups.length} groups');
 
       setState(() {
         _tasksFuture = Future.value(taskGroups);
         _isLoading = false;
       });
     } catch (e) {
-      print('Error en _loadTasks: $e');
+      print('❌ Error en _loadTasks: $e');
       setState(() {
         _errorMessage = 'Error al cargar tareas: ${e.toString()}';
         _isLoading = false;
@@ -60,33 +85,41 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
     }
   }
 
-  List<TaskGroup> _organizeTasksByDate(List<dynamic> tasksData) {
+  List<TaskGroup> _organizeTasksByDate(List<Map<String, dynamic>> tasksData) {
+    print('=== Organizing tasks by date ===');
     final Map<String, List<Task>> groupedTasks = {};
 
     for (final taskData in tasksData) {
       try {
+        print('Processing task data: ${taskData['id']} - ${taskData['titulo']}');
+        
         final task = Task.fromApi(taskData);
         
         // Aplicar filtro
         if (_currentFilter == TaskFilter.pending && task.status == TaskStatus.delivered) {
+          print('  Skipping - Filter: pending, Status: delivered');
           continue;
         }
         if (_currentFilter == TaskFilter.delivered && task.status != TaskStatus.delivered) {
+          print('  Skipping - Filter: delivered, Status: ${task.status}');
           continue;
         }
         
         final dateKey = DateFormat('yyyy-MM-dd').format(task.dueDate);
+        print('  Date key: $dateKey');
 
         if (!groupedTasks.containsKey(dateKey)) {
           groupedTasks[dateKey] = [];
         }
         groupedTasks[dateKey]!.add(task);
+        print('  ✅ Task added to group');
       } catch (e) {
-        print('Error procesando tarea: $e - Datos: $taskData');
+        print('❌ Error procesando tarea: $e');
+        print('  Datos: $taskData');
       }
     }
 
-    return groupedTasks.entries.map((entry) {
+    final groups = groupedTasks.entries.map((entry) {
       return TaskGroup(
         date: DateTime.parse(entry.key),
         tasks: entry.value,
@@ -95,6 +128,9 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
       ..sort((a, b) => _currentFilter == TaskFilter.recent 
           ? b.date.compareTo(a.date) 
           : a.date.compareTo(b.date));
+    
+    print('✅ Created ${groups.length} task groups');
+    return groups;
   }
 
   @override
@@ -118,6 +154,7 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _loadTasks,
+            tooltip: 'Actualizar',
           ),
         ],
       ),
@@ -159,10 +196,11 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
     
     return TextButton(
       onPressed: () {
+        print('Filter changed to: $filter');
         setState(() {
           _currentFilter = filter;
-          _loadTasks();
         });
+        _loadTasks();
       },
       style: TextButton.styleFrom(
         foregroundColor: isSelected ? Colors.white : Colors.white70,
@@ -184,35 +222,63 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Cargando tareas...',
+              style: TextStyle(color: Colors.indigo),
+            ),
+          ],
         ),
       );
     }
 
     if (_errorMessage.isNotEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _errorMessage, 
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.indigo[900]),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _loadTasks,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.indigo,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Colors.red[600],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error al cargar tareas',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.indigo[900],
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              child: const Text('Reintentar'),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.indigo[700]),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _loadTasks,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -260,20 +326,26 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.assignment, size: 48, color: Colors.indigo[300]),
+                Icon(
+                  Icons.assignment_outlined,
+                  size: 64,
+                  color: Colors.indigo[300],
+                ),
                 const SizedBox(height: 16),
                 Text(
-                  'No hay tareas disponibles',
+                  _getEmptyMessage(),
                   style: TextStyle(
                     fontSize: 18, 
                     color: Colors.indigo[900],
                     fontWeight: FontWeight.w500,
                   ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Cuando tengas tareas, aparecerán aquí',
+                  _getEmptySubtitle(),
                   style: TextStyle(color: Colors.indigo[700]),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -306,20 +378,68 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
     );
   }
 
+  String _getEmptyMessage() {
+    switch (_currentFilter) {
+      case TaskFilter.pending:
+        return 'No hay tareas pendientes';
+      case TaskFilter.delivered:
+        return 'No hay tareas entregadas';
+      case TaskFilter.recent:
+      default:
+        return 'No hay tareas disponibles';
+    }
+  }
+
+  String _getEmptySubtitle() {
+    switch (_currentFilter) {
+      case TaskFilter.pending:
+        return '¡Excelente! Has entregado todas tus tareas';
+      case TaskFilter.delivered:
+        return 'Aún no has entregado ninguna tarea';
+      case TaskFilter.recent:
+      default:
+        return 'Cuando tengas tareas asignadas, aparecerán aquí';
+    }
+  }
+
   Widget _buildDateHeader(DateTime date) {
     final today = DateTime.now();
     final isToday = date.year == today.year &&
         date.month == today.month &&
         date.day == today.day;
-    final isPast = date.isBefore(today) && !isToday;
+    final isPast = date.isBefore(DateTime(today.year, today.month, today.day)) && !isToday;
+    final isTomorrow = date.year == today.year &&
+        date.month == today.month &&
+        date.day == today.day + 1;
+
+    String dateText;
+    if (isToday) {
+      dateText = 'Hoy';
+    } else if (isTomorrow) {
+      dateText = 'Mañana';
+    } else if (isPast) {
+      dateText = 'Vencidas';
+    } else {
+      dateText = DateFormat('EEEE, d MMMM yyyy').format(date);
+    }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.indigo[50],
+        color: isToday
+            ? Colors.indigo[100]
+            : isPast
+                ? Colors.red[50]
+                : Colors.indigo[50],
         border: Border(
-          bottom: BorderSide(color: Colors.indigo[100]!, width: 1),
-          top: BorderSide(color: Colors.indigo[100]!, width: 1),
+          bottom: BorderSide(
+            color: isToday
+                ? Colors.indigo[200]!
+                : isPast
+                    ? Colors.red[100]!
+                    : Colors.indigo[100]!,
+            width: 1,
+          ),
         ),
       ),
       child: Row(
@@ -330,31 +450,52 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
             color: isToday
                 ? Colors.indigo[800]
                 : isPast
-                    ? Colors.indigo[400]
+                    ? Colors.red[400]
                     : Colors.indigo[600],
           ),
-          const SizedBox(width: 8),
-          Text(
-            DateFormat('EEEE, d MMMM yyyy').format(date),
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: isToday
-                  ? Colors.indigo[800]
-                  : isPast
-                      ? Colors.indigo[400]
-                      : Colors.indigo[600],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              dateText,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: isToday
+                    ? Colors.indigo[800]
+                    : isPast
+                        ? Colors.red[600]
+                        : Colors.indigo[600],
+              ),
             ),
           ),
+          if (!isToday && !isPast && !isTomorrow)
+            Text(
+              DateFormat('dd/MM/yyyy').format(date),
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.indigo[400],
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildTaskCard(BuildContext context, Task task) {
+    print('=== Building task card ===');
+    print('  Task ID: ${task.id} - ${task.title}');
+    print('  Status: ${task.status}');
+    print('  Deliveries count: ${task.deliveries.length}');
+    if (task.deliveries.isNotEmpty) {
+      print('  First delivery: ${task.deliveries.first}');
+    }
+    
     final isDelivered = task.status == TaskStatus.delivered;
     final description = task.description;
-    final isPastDue = task.dueDate.isBefore(DateTime.now()) && !isDelivered;
+    final isPastDue = task.isExpired && !isDelivered;
+    final hasCalificacion = task.deliveries.isNotEmpty && 
+        task.deliveries.first['calificacion'] != null &&
+        task.deliveries.first['calificacion'] != 'Sin calificar';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -400,14 +541,14 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: isDelivered 
-                            ? Colors.green[50] 
+                            ? (hasCalificacion ? Colors.green[50] : Colors.blue[50])
                             : isPastDue 
                                 ? Colors.red[50] 
                                 : Colors.orange[50],
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isDelivered 
-                              ? Colors.green[100]! 
+                              ? (hasCalificacion ? Colors.green[100]! : Colors.blue[100]!)
                               : isPastDue
                                   ? Colors.red[100]!
                                   : Colors.orange[100]!,
@@ -416,13 +557,13 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
                       ),
                       child: Text(
                         isDelivered 
-                            ? 'ENTREGADO' 
+                            ? (hasCalificacion ? 'CALIFICADA' : 'ENTREGADA')
                             : isPastDue
-                                ? 'VENCIDO'
+                                ? 'VENCIDA'
                                 : 'PENDIENTE',
                         style: TextStyle(
                           color: isDelivered 
-                              ? Colors.green[800] 
+                              ? (hasCalificacion ? Colors.green[800] : Colors.blue[800])
                               : isPastDue
                                   ? Colors.red[800]
                                   : Colors.orange[800],
@@ -451,7 +592,7 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      DateFormat('dd MMM yyyy').format(task.dueDate),
+                      task.formattedDueDate,
                       style: TextStyle(
                         color: isPastDue 
                             ? Colors.red[700] 
@@ -467,7 +608,7 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      task.dueTime?.isNotEmpty == true ? task.dueTime! : '23:59',
+                      task.dueTime ?? '23:59',
                       style: TextStyle(
                         color: isPastDue 
                             ? Colors.red[700] 
@@ -477,6 +618,10 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
                     ),
                   ],
                 ),
+                if (isDelivered && task.deliveries.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _buildDeliveryInfo(task.deliveries.first),
+                ],
                 if (description != null && description.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -499,11 +644,14 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
                         color: Colors.indigo[600],
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        'Archivo adjunto: ${task.filePath!.split('/').last}',
-                        style: TextStyle(
-                          color: Colors.indigo[600],
-                          fontSize: 14,
+                      Expanded(
+                        child: Text(
+                          'Archivo adjunto: ${task.filePath!.split('/').last}',
+                          style: TextStyle(
+                            color: Colors.indigo[600],
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -541,7 +689,68 @@ class _ListTaskScreenState extends State<ListTaskScreen> {
     );
   }
 
+  Widget _buildDeliveryInfo(Map<String, dynamic> delivery) {
+    final calificacion = delivery['calificacion'];
+    final observaciones = delivery['observaciones'];
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (calificacion != null && calificacion != 'Sin calificar') ...[
+          Row(
+            children: [
+              Icon(
+                Icons.grade,
+                size: 16,
+                color: Colors.amber[600],
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Calificación: $calificacion',
+                style: TextStyle(
+                  color: Colors.green[700],
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+        ],
+        if (observaciones != null && 
+            observaciones != 'Sin observaciones' && 
+            observaciones.toString().isNotEmpty) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.comment,
+                size: 16,
+                color: Colors.indigo[500],
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Obs: ${observaciones.toString()}',
+                  style: TextStyle(
+                    color: Colors.indigo[700],
+                    fontSize: 14,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   void _showTaskDetails(BuildContext context, Task task) {
+    print('Navigating to TaskScreen for task ${task.id}');
+    print('Task deliveries: ${task.deliveries}');
+    
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -562,14 +771,4 @@ enum TaskFilter {
   recent,
   pending,
   delivered,
-}
-
-class TaskGroup {
-  final DateTime date;
-  final List<Task> tasks;
-
-  TaskGroup({
-    required this.date,
-    required this.tasks,
-  });
 }

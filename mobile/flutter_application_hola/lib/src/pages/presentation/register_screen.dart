@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_hola/src/models/Usuarios.dart';
 import 'package:flutter_application_hola/src/services/api_service.dart';
-import 'dart:convert';
+import 'dart:async';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -16,16 +17,21 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   final _surnameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   final _teacherCodeController = TextEditingController();
   String? _selectedRole;
   bool _isLoading = false;
   bool _showTeacherCodeField = false;
-  bool _registrationSuccess = false;
-  String _registrationMessage = '';
   bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
-
+  
+  // Estado para la disponibilidad del usuario
+  Timer? _usernameDebounce;
+  bool _checkingUsername = false;
+  bool? _usernameAvailable;
+  String _usernameMessage = '';
+  
+  // Lista de usuarios existentes (para verificar disponibilidad)
+  List<Usuario> _usuariosExistentes = [];
+  
   // Colores para la interfaz
   final Color _primaryColor = const Color(0xFF4A6FDC);
   final Color _secondaryColor = const Color(0xFF6C63FF);
@@ -53,23 +59,108 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
       parent: _animationController,
       curve: Curves.elasticOut,
     ));
+    
+    // Escuchar cambios en el campo de usuario
+    _usernameController.addListener(_onUsernameChanged);
+    
+    // Cargar usuarios existentes al iniciar
+    _cargarUsuariosExistentes();
   }
 
   @override
   void dispose() {
+    _usernameController.removeListener(_onUsernameChanged);
+    _usernameDebounce?.cancel();
     _usernameController.dispose();
     _nameController.dispose();
     _surnameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _confirmPasswordController.dispose();
     _teacherCodeController.dispose();
     _animationController.dispose();
     super.dispose();
   }
 
+  Future<void> _cargarUsuariosExistentes() async {
+    try {
+      final usuarios = await ApiService.getUsuarios();
+      setState(() {
+        _usuariosExistentes = usuarios;
+      });
+    } catch (e) {
+      print('Error al cargar usuarios: $e');
+    }
+  }
+
+  void _onUsernameChanged() {
+    // Cancelar el timer anterior
+    _usernameDebounce?.cancel();
+    
+    // Reiniciar estados
+    setState(() {
+      _usernameAvailable = null;
+      _usernameMessage = '';
+      _checkingUsername = false;
+    });
+    
+    // Solo verificar si el username tiene al menos 3 caracteres
+    if (_usernameController.text.length >= 3) {
+      setState(() {
+        _checkingUsername = true;
+      });
+      
+      // Usar debounce para no hacer llamadas con cada tecla presionada
+      _usernameDebounce = Timer(const Duration(milliseconds: 800), () {
+        _checkUsernameAvailability(_usernameController.text);
+      });
+    }
+  }
+
+  Future<void> _checkUsernameAvailability(String username) async {
+    try {
+      // Verificar en la lista de usuarios existentes
+      final usernameLower = username.toLowerCase().trim();
+      final usuarioExistente = _usuariosExistentes.firstWhere(
+        (usuario) => usuario.username.toLowerCase() == usernameLower,
+        orElse: () => Usuario(
+          idUsuario: 0,
+          username: '',
+          nombre: '',
+          apellido: '',
+          email: '',
+          rol: '',
+        ),
+      );
+      
+      final isAvailable = usuarioExistente.username.isEmpty;
+      
+      setState(() {
+        _checkingUsername = false;
+        _usernameAvailable = isAvailable;
+        _usernameMessage = isAvailable 
+            ? 'Disponible'
+            : 'En uso';
+      });
+    } catch (e) {
+      setState(() {
+        _checkingUsername = false;
+        _usernameAvailable = null;
+        _usernameMessage = 'Error al verificar';
+      });
+    }
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Validar disponibilidad del usuario
+    if (_usernameAvailable == false) {
+      _showErrorDialog(
+        title: 'Usuario no disponible',
+        message: 'El nombre de usuario "$_usernameController.text" ya está en uso. Por favor, elige otro.',
+      );
+      return;
+    }
 
     // Validar código de docente si es necesario
     if (_selectedRole == 'Docente' && _teacherCodeController.text != '8977') {
@@ -100,18 +191,21 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
       );
     } catch (e) {
       String errorMessage = 'Error al crear la cuenta';
+      String errorType = e.toString();
       
-      // Detectar errores específicos de duplicados
-      if (e.toString().toLowerCase().contains('email') || 
-          e.toString().toLowerCase().contains('correo') ||
-          e.toString().toLowerCase().contains('duplicate')) {
+      // Detectar errores específicos de duplicados basado en tu API
+      if (errorType.contains('EMAIL_DUPLICADO')) {
         errorMessage = 'El correo electrónico ya está en uso. Por favor, usa otro correo.';
-      } else if (e.toString().toLowerCase().contains('username') || 
-                 e.toString().toLowerCase().contains('usuario') ||
-                 e.toString().toLowerCase().contains('nombre de usuario')) {
+      } else if (errorType.contains('USERNAME_DUPLICADO')) {
+        errorMessage = 'El nombre de usuario ya está en uso. Por favor, elige otro.';
+      } else if (errorType.toLowerCase().contains('email') || 
+                 errorType.toLowerCase().contains('correo')) {
+        errorMessage = 'El correo electrónico ya está en uso. Por favor, usa otro correo.';
+      } else if (errorType.toLowerCase().contains('username') || 
+                 errorType.toLowerCase().contains('usuario')) {
         errorMessage = 'El nombre de usuario ya está en uso. Por favor, elige otro.';
       } else {
-        errorMessage = 'Error: ${e.toString()}';
+        errorMessage = 'Error: $errorType';
       }
       
       _showErrorDialog(
@@ -340,91 +434,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     );
   }
 
-  // NOTIFICACIONES FLOTANTES PARA VALIDACIONES EN TIEMPO REAL
-  void _showCustomNotification({
-    required String title,
-    required String message,
-    required String type, // 'success', 'error', 'warning'
-  }) {
-    Color backgroundColor;
-    IconData icon;
-
-    switch (type) {
-      case 'success':
-        backgroundColor = _successColor;
-        icon = Icons.check_circle;
-        break;
-      case 'error':
-        backgroundColor = _errorColor;
-        icon = Icons.error;
-        break;
-      case 'warning':
-        backgroundColor = Colors.orange.shade600;
-        icon = Icons.warning;
-        break;
-      default:
-        backgroundColor = _primaryColor;
-        icon = Icons.info;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: Colors.white, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      message,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.white,
-                        height: 1.3,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        backgroundColor: backgroundColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        margin: const EdgeInsets.all(20),
-        duration: const Duration(seconds: 4),
-        elevation: 8,
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
-  }
-
   void _updateRole(String? role) {
     setState(() {
       _selectedRole = role;
@@ -433,6 +442,71 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         _teacherCodeController.clear();
       }
     });
+  }
+
+  // Widget para mostrar el indicador de disponibilidad de usuario
+  Widget _buildUsernameAvailabilityIndicator() {
+    if (_checkingUsername) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Bola de carga
+          Container(
+            width: 16,
+            height: 16,
+            margin: const EdgeInsets.only(right: 8),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(_primaryColor),
+            ),
+          ),
+          Text(
+            'Verificando...',
+            style: TextStyle(
+              fontSize: 12,
+              color: _textColor.withOpacity(0.6),
+            ),
+          ),
+        ],
+      );
+    }
+    
+    if (_usernameAvailable != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Bola con icono - Estilo como en la imagen
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: _usernameAvailable! ? _successColor.withOpacity(0.1) : _errorColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: _usernameAvailable! ? _successColor : _errorColor,
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              _usernameAvailable! ? Icons.check : Icons.close,
+              size: 14,
+              color: _usernameAvailable! ? _successColor : _errorColor,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _usernameMessage,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: _usernameAvailable! ? _successColor : _errorColor,
+            ),
+          ),
+        ],
+      );
+    }
+    
+    return const SizedBox.shrink();
   }
 
   @override
@@ -509,26 +583,57 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                 ),
                 child: Column(
                   children: [
-                    // Usuario
-                    TextFormField(
-                      controller: _usernameController,
-                      decoration: InputDecoration(
-                        labelText: 'Nombre de usuario',
-                        labelStyle: TextStyle(color: _textColor.withOpacity(0.6)),
-                        prefixIcon: Icon(Icons.person_outline_rounded, color: _primaryColor),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: _textColor.withOpacity(0.2)),
+                    // Usuario con indicador de disponibilidad
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextFormField(
+                          controller: _usernameController,
+                          decoration: InputDecoration(
+                            labelText: 'Nombre de usuario',
+                            labelStyle: TextStyle(color: _textColor.withOpacity(0.6)),
+                            prefixIcon: Icon(Icons.person_outline_rounded, color: _primaryColor),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: _textColor.withOpacity(0.2)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: _primaryColor, width: 1.5),
+                            ),
+                            filled: true,
+                            fillColor: _backgroundColor.withOpacity(0.5),
+                            hintText: 'Ej: juan123',
+                            suffixIcon: _checkingUsername || _usernameAvailable != null
+                                ? Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: _buildUsernameAvailabilityIndicator(),
+                                  )
+                                : null,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Por favor, ingrese un usuario';
+                            }
+                            if (value.length < 3) {
+                              return 'Mínimo 3 caracteres';
+                            }
+                            if (_usernameAvailable == false) {
+                              return 'Este usuario ya está en uso';
+                            }
+                            return null;
+                          },
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: _primaryColor, width: 1.5),
+                        const SizedBox(height: 4),
+                        // Nota informativa
+                        Text(
+                          'El sistema verificará si el usuario está disponible',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: _textColor.withOpacity(0.5),
+                          ),
                         ),
-                        filled: true,
-                        fillColor: _backgroundColor.withOpacity(0.5),
-                      ),
-                      validator: (value) => 
-                          value == null || value.isEmpty ? 'Por favor, ingrese un usuario' : null,
+                      ],
                     ),
                     const SizedBox(height: 16),
                     
@@ -597,6 +702,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                         ),
                         filled: true,
                         fillColor: _backgroundColor.withOpacity(0.5),
+                        hintText: 'ejemplo@gmail.com',
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -610,7 +716,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                     ),
                     const SizedBox(height: 16),
                     
-                    // Contraseña
+                    // Contraseña (solo un campo)
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
@@ -639,6 +745,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                         ),
                         filled: true,
                         fillColor: _backgroundColor.withOpacity(0.5),
+                        hintText: 'Mínimo 6 caracteres',
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -646,48 +753,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                         }
                         if (value.length < 6) {
                           return 'La contraseña debe tener al menos 6 caracteres';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Confirmar contraseña
-                    TextFormField(
-                      controller: _confirmPasswordController,
-                      obscureText: _obscureConfirmPassword,
-                      decoration: InputDecoration(
-                        labelText: 'Confirmar Contraseña',
-                        labelStyle: TextStyle(color: _textColor.withOpacity(0.6)),
-                        prefixIcon: Icon(Icons.lock_outline_rounded, color: _primaryColor),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
-                            color: _textColor.withOpacity(0.4),
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscureConfirmPassword = !_obscureConfirmPassword;
-                            });
-                          },
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: _textColor.withOpacity(0.2)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: _primaryColor, width: 1.5),
-                        ),
-                        filled: true,
-                        fillColor: _backgroundColor.withOpacity(0.5),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor, confirme su contraseña';
-                        }
-                        if (value != _passwordController.text) {
-                          return 'Las contraseñas no coinciden';
                         }
                         return null;
                       },
