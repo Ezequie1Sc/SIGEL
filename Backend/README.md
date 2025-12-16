@@ -1,0 +1,68 @@
+# SIGEL - Sistema de Gestión de Laboratorio
+Sistema integral de gestión para laboratorios académicos desarrollado con Flutter para el fr# SIGEL - Sistema de Gestión de Laboratorio
+
+![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+
+Sistema integral de gestión para laboratorios académicos desarrollado con Flutter para el frontend móvil y Python/Flask para el backend.
+ontend móvil y Python/Flask para el backend.
+## 🚀 Características Principales
+
+- **Gestión de Inventario** - Control completo de reactivos y materiales
+- **Sistema de Roles** - Administrador, Docente, Alumno
+- **Solicitudes de Material** - Proceso automatizado de solicitudes
+- **Gestión de Tareas** - Asignación y entrega de trabajos
+- **Sistema de Reservas** - Reserva de equipos y espacios
+- **Notificaciones** - Comunicaciones en tiempo real
+- **Multiplataforma** - iOS, Android y Web
+
+## 📁 Estructura del Proyecto
+sigel/
+├── 📱 mobile/ # Aplicación Flutter
+│ ├── lib/
+│ ├── android/
+│ ├── ios/
+│ └── pubspec.yaml
+├── 🖥 backend/ # Servidor API Flask
+│ ├── app.py
+│ ├── requirements.txt
+│ ├── database/
+│ ├── server/
+│ ├── .env.example
+│ ├── Dockerfile
+│ └── uploads/
+└── 🐳 docker-compose.yml # Orquestación de contenedores
+
+## 🛠 Tecnologías Utilizadas
+
+### Frontend (Mobile)
+- **Flutter** - Framework UI multiplataforma
+- **Dart** - Lenguaje de programación
+- **Provider** - Gestión de estado
+- **HTTP** - Cliente para APIs REST
+
+### Backend
+- **Python** - Lenguaje de programación
+- **Flask** - Framework web
+- **Flask-RESTX** - API REST con documentación automática
+- **SQLAlchemy** - ORM para base de datos
+- **PostgreSQL** - Base de datos principal
+- **JWT** - Autenticación por tokens
+
+### DevOps
+- **Docker** - Contenerización
+- **Docker Compose** - Orquestación
+- **PostgreSQL** - Base de datos en contenedor
+
+## ⚡ Instalación Rápida
+
+### Prerrequisitos
+- Docker y Docker Compose instalados
+- Git para clonar el repositorio
+
+### 1. Clonar el Repositorio
+```bash
+git clone https://github.com/Ezequie1Sc/SIGEL
+cd sigel
