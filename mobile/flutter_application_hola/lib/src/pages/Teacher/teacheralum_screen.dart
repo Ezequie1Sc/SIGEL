@@ -46,11 +46,7 @@ class TeacheralumScreen extends StatelessWidget {
           titleLarge: TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold),
           bodyMedium: TextStyle(color: Colors.indigo),
         ),
-        cardTheme: CardTheme(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 2,
-        ),
-        useMaterial3: true,
+        
       ),
       home: const TeamManagementScreen(),
     );

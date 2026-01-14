@@ -13,6 +13,8 @@ import 'package:flutter_application_hola/src/pages/Teacher/teacheralum_screen.da
 import 'package:flutter_application_hola/src/pages/Teacher/teacheriventory_screen.dart';
 import 'package:flutter_application_hola/src/services/api_service.dart';
 
+import 'src/pages/Teacher/taskteacher_Screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ApiService.initSession();

@@ -70,6 +70,200 @@ class _TeacherInventoryScreenState extends State<TeacherInventoryScreen> {
     super.dispose();
   }
 
+  void _showAddCategoryDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AddCategoryDialog(
+        onCategoryAdded: _fetchData,
+      ),
+    );
+  }
+
+  void _showManageCategories() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            height: MediaQuery.of(context).size.height * 0.8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Gestionar Categorías',
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _showAddCategoryDialog,
+                        icon: const Icon(Icons.add, color: Colors.white),
+                        label: const Text('Agregar Nueva Categoría', style: TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.teal[600],
+                          foregroundColor: Colors.white, // Texto blanco
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _categorias.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.category_outlined, 
+                                  size: 60, color: Colors.grey[400]),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'No hay categorías creadas',
+                                style: TextStyle(fontSize: 18, color: Colors.grey),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Presiona el botón para agregar una',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _categorias.length,
+                          itemBuilder: (context, index) {
+                            final categoria = _categorias[index];
+                            final reactivosEnCategoria = _reactivos
+                                .where((r) => r.categoria == categoria.nombre)
+                                .length;
+                            
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.teal[100],
+                                  child: Icon(Icons.category, 
+                                      color: Colors.teal[600]),
+                                ),
+                                title: Text(
+                                  categoria.nombre,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (categoria.descripcion != null)
+                                      Text(
+                                        categoria.descripcion!,
+                                        style: TextStyle(color: Colors.grey[600]),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    Text(
+                                      '$reactivosEnCategoria reactivo(s)',
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                trailing: IconButton(
+                                  onPressed: () {
+                                    _showDeleteCategoriaDialog(context, categoria);
+                                  },
+                                  icon: Icon(Icons.delete_outline, 
+                                      color: Colors.red[600]),
+                                  tooltip: 'Eliminar categoría',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDeleteCategoriaDialog(BuildContext context, Categoria categoria) {
+    final reactivosEnCategoria = _reactivos
+        .where((r) => r.categoria == categoria.nombre)
+        .length;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Eliminar ${categoria.nombre}', 
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        content: Text(
+          reactivosEnCategoria > 0
+              ? 'No se puede eliminar la categoría "${categoria.nombre}" porque contiene $reactivosEnCategoria reactivo(s).\n\nPor favor, primero elimina o mueve los reactivos a otra categoría.'
+              : '¿Estás seguro de que deseas eliminar la categoría "${categoria.nombre}"?',
+          style: TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar', style: TextStyle(fontSize: 16)),
+          ),
+          if (reactivosEnCategoria == 0)
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await ApiService.deleteCategoria(categoria.idCategoria);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Categoría ${categoria.nombre} eliminada')),
+                    );
+                    Navigator.pop(context);
+                    Navigator.pop(context); // Cerrar el bottom sheet también
+                    _fetchData();
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error al eliminar: $e')),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[600],
+                foregroundColor: Colors.white, // Texto blanco
+              ),
+              child: const Text('Eliminar', style: TextStyle(fontSize: 16)),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final reactivosBajos = _reactivos.where((r) => r.cantidad < r.minimo).toList();
@@ -86,13 +280,27 @@ class _TeacherInventoryScreenState extends State<TeacherInventoryScreen> {
         elevation: 4,
         shadowColor: Colors.black26,
         actions: [
+          // Botón para gestionar categorías
+          IconButton(
+            onPressed: _showManageCategories,
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.category, color: Colors.white, size: 24),
+            ),
+            tooltip: 'Gestionar categorías',
+          ),
+          // Botón para agregar reactivo
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: IconButton(
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const AddrecScreen()),
+                  MaterialPageRoute(builder: (context) => AddrecScreen()),
                 ).then((_) => _fetchData());
               },
               icon: Container(
@@ -135,17 +343,37 @@ class _TeacherInventoryScreenState extends State<TeacherInventoryScreen> {
       duration: const Duration(milliseconds: 200),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 100.0),
-        child: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AddrecScreen()),
-            ).then((_) => _fetchData());
-          },
-          backgroundColor: Colors.indigo[700],
-          foregroundColor: Colors.white,
-          elevation: 6,
-          child: const Icon(Icons.add, size: 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Botón para agregar categoría
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: FloatingActionButton(
+                onPressed: _showAddCategoryDialog,
+                backgroundColor: Colors.teal[600],
+                foregroundColor: Colors.white,
+                elevation: 6,
+                heroTag: 'add_category',
+                mini: true,
+                child: const Icon(Icons.category, size: 22),
+              ),
+            ),
+            // Botón para agregar reactivo
+            FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AddrecScreen()),
+                ).then((_) => _fetchData());
+              },
+              backgroundColor: Colors.indigo[700],
+              foregroundColor: Colors.white,
+              elevation: 6,
+              heroTag: 'add_reactivo',
+              child: const Icon(Icons.add, size: 28),
+            ),
+          ],
         ),
       ),
     );
@@ -236,10 +464,19 @@ class _TeacherInventoryScreenState extends State<TeacherInventoryScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: _buildSummaryCard(
-              title: 'Total',
+              title: 'Reactivos',
               value: _reactivos.length.toString(),
               color: Colors.indigo[900]!,
               icon: Icons.science_outlined,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildSummaryCard(
+              title: 'Categorías',
+              value: _categorias.length.toString(),
+              color: Colors.teal[600]!,
+              icon: Icons.category_outlined,
             ),
           ),
         ],
@@ -544,6 +781,10 @@ class ReactivoCard extends StatelessWidget {
                 }
               }
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo[600],
+              foregroundColor: Colors.white, // Texto blanco
+            ),
             child: const Text('Reducir', style: TextStyle(fontSize: 16)),
           ),
         ],
@@ -623,6 +864,10 @@ class ReactivoCard extends StatelessWidget {
                 }
               }
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green[600],
+              foregroundColor: Colors.white, // Texto blanco
+            ),
             child: const Text('Agregar', style: TextStyle(fontSize: 16)),
           ),
         ],
@@ -662,8 +907,9 @@ class ReactivoCard extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white, // Texto blanco
             ),
-            child: const Text('Eliminar', style: TextStyle(fontSize: 16, color: Colors.white)),
+            child: const Text('Eliminar', style: TextStyle(fontSize: 16)),
           ),
         ],
       ),
@@ -882,8 +1128,9 @@ class CategorySectionWidget extends StatelessWidget {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red[600],
+                foregroundColor: Colors.white, // Texto blanco
               ),
-              child: const Text('Eliminar', style: TextStyle(fontSize: 16, color: Colors.white)),
+              child: const Text('Eliminar', style: TextStyle(fontSize: 16)),
             ),
         ],
       ),
@@ -1008,4 +1255,125 @@ class _ChartData {
   final Color color;
 
   const _ChartData(this.label, this.value, this.color);
+}
+
+// Clase para el diálogo de agregar categoría
+class AddCategoryDialog extends StatefulWidget {
+  final VoidCallback onCategoryAdded;
+
+  const AddCategoryDialog({super.key, required this.onCategoryAdded});
+
+  @override
+  State<AddCategoryDialog> createState() => _AddCategoryDialogState();
+}
+
+class _AddCategoryDialogState extends State<AddCategoryDialog> {
+  final TextEditingController _nombreController = TextEditingController();
+  final TextEditingController _descripcionController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Agregar Nueva Categoría', 
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nombreController,
+                decoration: InputDecoration(
+                  labelText: 'Nombre de la categoría',
+                  labelStyle: TextStyle(fontSize: 16),
+                  hintText: 'Ej: Ácidos, Bases, Sales, etc.',
+                  hintStyle: TextStyle(fontSize: 14),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Por favor ingresa un nombre';
+                  }
+                  return null;
+                },
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descripcionController,
+                decoration: InputDecoration(
+                  labelText: 'Descripción (opcional)',
+                  labelStyle: TextStyle(fontSize: 16),
+                  hintText: 'Ej: Reactivos con pH menor a 7',
+                  hintStyle: TextStyle(fontSize: 14),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                maxLines: 3,
+                style: TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text('Cancelar', style: TextStyle(fontSize: 16)),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _createCategory,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal[600],
+            foregroundColor: Colors.white, // Texto blanco
+          ),
+          child: _isLoading 
+              ? const SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Crear Categoría', style: TextStyle(fontSize: 16)),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _createCategory() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await ApiService.createCategoria(
+        nombre: _nombreController.text.trim(),
+        descripcion: _descripcionController.text.trim().isNotEmpty 
+            ? _descripcionController.text.trim() 
+            : null,
+      );
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Categoría "${_nombreController.text}" creada exitosamente')),
+        );
+        widget.onCategoryAdded();
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al crear categoría: $e')),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nombreController.dispose();
+    _descripcionController.dispose();
+    super.dispose();
+  }
 }

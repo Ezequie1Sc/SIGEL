@@ -55,9 +55,78 @@ class _PublicationsScreenState extends State<PublicationsScreen> with SingleTick
     super.dispose();
   }
 
-  void _addOrUpdatePublication() {
-    if (_titleController.text.isEmpty || _contentController.text.isEmpty) return;
+  // Método para mostrar confirmación antes de publicar/guardar
+  Future<void> _confirmAddOrUpdatePublication() async {
+    if (_titleController.text.isEmpty || _contentController.text.isEmpty) {
+      _showSnackBar('Por favor completa todos los campos', isError: true);
+      return;
+    }
 
+    final action = _isEditing ? 'guardar' : 'publicar';
+    
+    final result = await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: _isDarkMode ? Colors.grey[800] : Colors.white,
+          title: Text(
+            'Confirmar ${_isEditing ? 'Edición' : 'Publicación'}',
+            style: TextStyle(
+              color: _isDarkMode ? Colors.white : Colors.indigo[900],
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            _isEditing 
+              ? '¿Estás seguro de que deseas guardar los cambios en este aviso?'
+              : '¿Estás seguro de que deseas publicar este aviso?',
+            style: TextStyle(
+              color: _isDarkMode ? Colors.grey[400] : Colors.indigo[700],
+              fontSize: 16,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(
+                  color: _isDarkMode ? Colors.grey[400] : Colors.indigo[700],
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo[600],
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: Text(
+                _isEditing ? 'Guardar' : 'Publicar',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      _addOrUpdatePublication();
+    }
+  }
+
+  void _addOrUpdatePublication() {
     setState(() {
       if (_isEditing && _editingIndex != null) {
         _publications[_editingIndex!] = {
@@ -66,6 +135,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> with SingleTick
           'date': DateTime.now().toString(),
           'group': _selectedGroup,
         };
+        _showSnackBar('Aviso actualizado exitosamente', isError: false);
       } else {
         _publications.insert(0, {
           'title': _titleController.text,
@@ -73,6 +143,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> with SingleTick
           'date': DateTime.now().toString(),
           'group': _selectedGroup,
         });
+        _showSnackBar('Aviso publicado exitosamente', isError: false);
       }
       _titleController.clear();
       _contentController.clear();
@@ -82,6 +153,47 @@ class _PublicationsScreenState extends State<PublicationsScreen> with SingleTick
     });
 
     FocusScope.of(context).unfocus();
+  }
+
+  // Método para mostrar notificaciones tipo snackbar
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle,
+              color: isError ? Colors.red[100] : Colors.green[100],
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? Colors.red[600] : Colors.green[600],
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
   }
 
   void _editPublication(int index) {
@@ -99,6 +211,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> with SingleTick
     setState(() {
       _publications.removeAt(index);
     });
+    _showSnackBar('Aviso eliminado exitosamente', isError: false);
   }
 
   void _scrollToTop() {
@@ -376,7 +489,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> with SingleTick
                                 borderRadius: BorderRadius.circular(10),
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(10),
-                                  onTap: _addOrUpdatePublication,
+                                  onTap: _confirmAddOrUpdatePublication, // Cambiado a la función de confirmación
                                   child: Container(
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(

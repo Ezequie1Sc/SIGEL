@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_application_hola/src/services/api_task_services.dart';
 import 'package:open_file/open_file.dart';
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 class TaskScreen extends StatefulWidget {
   final Task task;
@@ -332,25 +334,178 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     );
   }
 
-Future<void> _descargarArchivoTarea(String resourceType, int resourceId, String filePath) async {
-  try {
-    final file = await _apiService.downloadFile(
-      resourceType: resourceType,
-      resourceId: resourceId,
-      filePath: filePath, // CAMBIADO: fileName -> filePath
-    );
-    _showSuccessDialog(
-      title: '¡Descarga Exitosa!',
-      message: 'El archivo se ha descargado correctamente',
-    );
-    await OpenFile.open(file.path);
-  } catch (e) {
-    _showErrorDialog(
-      title: 'Error en Descarga',
-      message: 'No se pudo descargar el archivo: $e',
-    );
+  Future<void> _descargarArchivoTarea(String resourceType, int resourceId, String filePath) async {
+    try {
+      // Validar parámetros
+      if (resourceId <= 0 || filePath.isEmpty || filePath == 'Sin archivo' || filePath == 'null') {
+        _showErrorDialog(
+          title: 'Error en Descarga',
+          message: 'No hay archivo disponible para descargar',
+        );
+        return;
+      }
+
+      print('Descargando archivo:');
+      print('  Tipo: $resourceType');
+      print('  ID: $resourceId');
+      print('  Ruta: $filePath');
+
+      // Mostrar notificación de inicio
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 12),
+              Text('Descargando ${filePath.split('/').last}...'),
+            ],
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+
+      // Descargar el archivo
+      final file = await _apiService.downloadFile(
+        resourceType: resourceType,
+        resourceId: resourceId,
+        filePath: filePath, // Usar la ruta completa
+      );
+
+      // Verificar resultado
+      if (file != null && await file.exists() && await file.length() > 0) {
+        // Mostrar diálogo de éxito
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('✅ Descarga Exitosa'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Archivo: ${filePath.split('/').last}'),
+                const SizedBox(height: 8),
+                Text('Ubicación: ${file.path}'),
+                const SizedBox(height: 16),
+                const Text('¿Qué deseas hacer?'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Solo descargar'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  try {
+                    final result = await OpenFile.open(file.path);
+                    if (result.type != ResultType.done) {
+                      _showCustomNotification(
+                        title: 'Atención',
+                        message: 'No se pudo abrir el archivo automáticamente',
+                        type: 'warning',
+                      );
+                    }
+                  } catch (e) {
+                    _showCustomNotification(
+                      title: 'Error',
+                      message: 'Error al abrir archivo: $e',
+                      type: 'error',
+                    );
+                  }
+                },
+                child: const Text('Abrir archivo'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        _showErrorDialog(
+          title: 'Error en Descarga',
+          message: 'El archivo descargado está vacío o no se pudo guardar',
+        );
+      }
+    } catch (e) {
+      print('❌ Error en _descargarArchivoTarea: $e');
+      
+      // Mensaje de error específico
+      String errorMessage = 'Error desconocido';
+      if (e.toString().contains('404')) {
+        errorMessage = 'El archivo no existe en el servidor';
+      } else if (e.toString().contains('Connection') || e.toString().contains('Socket')) {
+        errorMessage = 'Error de conexión. Verifica tu internet.';
+      } else if (e.toString().contains('403')) {
+        errorMessage = 'No tienes permisos para descargar este archivo';
+      } else if (e.toString().contains('No hay archivo')) {
+        errorMessage = 'No hay archivo disponible para descargar';
+      } else {
+        errorMessage = e.toString();
+      }
+
+      _showErrorDialog(
+        title: 'Error en Descarga',
+        message: 'No se pudo descargar el archivo: $errorMessage',
+      );
+    }
   }
-}
+
+  // Método alternativo para descargar desde URL
+  Future<void> _descargarDesdeUrl(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        final directory = await getApplicationDocumentsDirectory();
+        final fileName = url.split('/').last;
+        final file = File('${directory.path}/downloads/$fileName');
+        
+        // Crear directorio si no existe
+        final downloadDir = Directory('${directory.path}/downloads');
+        if (!await downloadDir.exists()) {
+          await downloadDir.create(recursive: true);
+        }
+        
+        await file.writeAsBytes(bytes);
+        await _manejarArchivoDescargado(file, fileName);
+      }
+    } catch (e) {
+      _showErrorDialog(
+        title: 'Error en Descarga',
+        message: 'Error al descargar desde URL: $e',
+      );
+    }
+  }
+
+  Future<void> _manejarArchivoDescargado(File file, String fileName) async {
+    final shouldOpen = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('✅ Descarga completada'),
+        content: Text('El archivo "$fileName" se ha descargado correctamente. ¿Deseas abrirlo?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí'),
+          ),
+        ],
+      ),
+    );
+    
+    if (shouldOpen == true) {
+      final result = await OpenFile.open(file.path);
+      if (result.type != ResultType.done) {
+        _showCustomNotification(
+          title: 'Atención',
+          message: 'No se pudo abrir el archivo automáticamente',
+          type: 'warning',
+        );
+      }
+    }
+  }
 
   Future<void> _eliminarEntrega() async {
     if (_userDelivery == null || _userDelivery!['id_entrega'] == null) {
@@ -1313,7 +1468,7 @@ Future<void> _descargarArchivoTarea(String resourceType, int resourceId, String 
             onDownload: () => _descargarArchivoTarea(
               'tarea',
               widget.taskId,
-              widget.task.filePath!.split('/').last,
+              widget.task.filePath!, // Usar la ruta completa
             ),
             label: 'Archivo de la tarea',
           ),
@@ -1326,7 +1481,7 @@ Future<void> _descargarArchivoTarea(String resourceType, int resourceId, String 
             onDownload: () => _descargarArchivoTarea(
               'entrega',
               _userDelivery!['id_entrega'],
-              _userDelivery!['archivo_ruta'].split('/').last,
+              _userDelivery!['archivo_ruta'], // Usar la ruta completa
             ),
             onRemove: widget.userRole == 'alumno' && !widget.task.isExpired ? _eliminarEntrega : null,
             label: 'Tu entrega',

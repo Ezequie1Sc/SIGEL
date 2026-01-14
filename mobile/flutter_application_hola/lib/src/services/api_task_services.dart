@@ -6,13 +6,13 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 class ApiTaskServices {
-  
+ 
   dynamic _handleResponse(http.Response response) {
     print('=== API Response ===');
     print('Status Code: ${response.statusCode}');
     print('Body: ${response.body.length > 200 ? response.body.substring(0, 200) + "..." : response.body}');
     print('Headers: ${response.headers}');
-    
+   
     // Intentar parsear JSON
     try {
       if (response.body.isNotEmpty) {
@@ -75,16 +75,13 @@ class ApiTaskServices {
       var uri = Uri.parse(ApiConnection.getTareasEndpoint());
       const int maxRedirects = 5;
       int redirectCount = 0;
-
       while (redirectCount < maxRedirects) {
         var request = http.MultipartRequest('POST', uri);
-
         request.fields['titulo'] = titulo;
         request.fields['creado_por'] = creadoPor.toString();
         if (descripcion != null) request.fields['descripcion'] = descripcion;
         if (fechaEntrega != null) request.fields['fecha_entrega'] = fechaEntrega;
         if (horaCierre != null) request.fields['hora_cierre'] = horaCierre;
-
         if (archivo != null) {
           print('Attaching file: ${archivo.path}');
           var fileStream = http.ByteStream(archivo.openRead());
@@ -98,13 +95,10 @@ class ApiTaskServices {
           );
           request.files.add(multipartFile);
         }
-
         var response = await request.send();
         var responseBody = await response.stream.bytesToString();
-
         print('Create task response: ${response.statusCode}');
         print('Response body: $responseBody');
-
         if (response.statusCode >= 200 && response.statusCode < 300) {
           try {
             return responseBody.isNotEmpty ? json.decode(responseBody) : {
@@ -152,15 +146,12 @@ class ApiTaskServices {
       var uri = Uri.parse(ApiConnection.getTareaByIdEndpoint(taskId));
       const int maxRedirects = 5;
       int redirectCount = 0;
-
       while (redirectCount < maxRedirects) {
         var request = http.MultipartRequest('PUT', uri);
-
         request.fields['titulo'] = titulo;
         if (descripcion != null) request.fields['descripcion'] = descripcion;
         if (fechaEntrega != null) request.fields['fecha_entrega'] = fechaEntrega;
         if (horaCierre != null) request.fields['hora_cierre'] = horaCierre;
-
         if (archivo != null) {
           print('Attaching file for update: ${archivo.path}');
           var fileStream = http.ByteStream(archivo.openRead());
@@ -174,13 +165,10 @@ class ApiTaskServices {
           );
           request.files.add(multipartFile);
         }
-
         var response = await request.send();
         var responseBody = await response.stream.bytesToString();
-
         print('Update task response: ${response.statusCode}');
         print('Response body: $responseBody');
-
         if (response.statusCode >= 200 && response.statusCode < 300) {
           try {
             return responseBody.isNotEmpty ? json.decode(responseBody) : {
@@ -237,10 +225,10 @@ class ApiTaskServices {
         Uri.parse(ApiConnection.getEntregasByTaskEndpoint(taskId)),
         headers: ApiConnection.jsonHeaders,
       );
-      
+     
       print('Deliveries response status: ${response.statusCode}');
       final result = _handleResponse(response);
-      
+     
       if (result is List) {
         print('Found ${result.length} deliveries');
         return result;
@@ -269,15 +257,12 @@ class ApiTaskServices {
       var uri = Uri.parse(ApiConnection.getEntregasEndpoint());
       const int maxRedirects = 5;
       int redirectCount = 0;
-
       while (redirectCount < maxRedirects) {
         var request = http.MultipartRequest('POST', uri);
-
         request.fields['id_tarea'] = taskId.toString();
         request.fields['id_alumno'] = alumnoId.toString();
         if (calificacion != null) request.fields['calificacion'] = calificacion.toString();
         if (observaciones != null) request.fields['observaciones'] = observaciones;
-
         if (archivo != null) {
           print('Attaching delivery file: ${archivo.path}');
           var fileStream = http.ByteStream(archivo.openRead());
@@ -291,13 +276,10 @@ class ApiTaskServices {
           );
           request.files.add(multipartFile);
         }
-
         var response = await request.send();
         var responseBody = await response.stream.bytesToString();
-
         print('Create delivery response: ${response.statusCode}');
         print('Response body: $responseBody');
-
         if (response.statusCode >= 200 && response.statusCode < 300) {
           try {
             final result = responseBody.isNotEmpty ? json.decode(responseBody) : {
@@ -349,13 +331,10 @@ class ApiTaskServices {
       var uri = Uri.parse(ApiConnection.getEntregaByIdEndpoint(deliveryId));
       const int maxRedirects = 5;
       int redirectCount = 0;
-
       while (redirectCount < maxRedirects) {
         var request = http.MultipartRequest('PUT', uri);
-
         if (calificacion != null) request.fields['calificacion'] = calificacion.toString();
         if (observaciones != null) request.fields['observaciones'] = observaciones;
-
         if (archivo != null) {
           print('Attaching updated file: ${archivo.path}');
           var fileStream = http.ByteStream(archivo.openRead());
@@ -369,13 +348,10 @@ class ApiTaskServices {
           );
           request.files.add(multipartFile);
         }
-
         var response = await request.send();
         var responseBody = await response.stream.bytesToString();
-
         print('Update delivery response: ${response.statusCode}');
         print('Response body: $responseBody');
-
         if (response.statusCode >= 200 && response.statusCode < 300) {
           try {
             final result = responseBody.isNotEmpty ? json.decode(responseBody) : {
@@ -429,8 +405,8 @@ class ApiTaskServices {
     }
   }
 
-  // MÉTODO DOWNLOADFILE COMPLETAMENTE CORREGIDO
-  Future<File> downloadFile({
+  // MÉTODO DOWNLOADFILE CORREGIDO - SOLUCIÓN SIMPLIFICADA
+  Future<File?> downloadFile({
     required String resourceType,
     required int resourceId,
     required String filePath,
@@ -439,310 +415,167 @@ class ApiTaskServices {
       print('=== DOWNLOAD FILE START ===');
       print('Resource Type: $resourceType');
       print('Resource ID: $resourceId');
-      print('File Path: $filePath');
-      
-      if (resourceType != 'tarea' && resourceType != 'entrega') {
-        throw Exception('Tipo de recurso inválido. Use "tarea" o "entrega"');
+      print('Original File Path: $filePath');
+
+      // Validar filePath
+      if (filePath.isEmpty || filePath == 'Sin archivo' || filePath == 'null') {
+        throw Exception('No hay archivo disponible para descargar');
       }
 
-    // Validar filePath
-    if (filePath.isEmpty || filePath == 'Sin archivo') {
-      throw Exception('No hay archivo disponible para descargar');
-    }
-
-    // Decodificar caracteres especiales
-    filePath = Uri.decodeFull(filePath);
-    
-    // Extraer el nombre del archivo de la ruta
-    String fileName = filePath.split('/').last;
-    
-    // Construir URL - PRIMER INTENTO: usando el filePath completo como parámetro
-    String endpoint;
-    if (resourceType == 'tarea') {
-      endpoint = '${ApiConnection.baseUrl}/api/tareas/$resourceId/descargar?file=${Uri.encodeComponent(filePath)}';
-    } else {
-      endpoint = '${ApiConnection.baseUrl}/api/entregas/$resourceId/descargar?file=${Uri.encodeComponent(filePath)}';
-    }
-    
-    print('Download URL (Attempt 1): $endpoint');
-
-    // Realizar la petición GET
-    final response = await http.get(
-      Uri.parse(endpoint),
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'Accept': 'application/octet-stream',
-        ...ApiConnection.jsonHeaders,
-      },
-    );
-
-    print('Download Response Status: ${response.statusCode}');
-    print('Response Content-Type: ${response.headers['content-type']}');
-    print('Response Headers: ${response.headers}');
-
-    if (response.statusCode == 200) {
-      // Verificar si es un archivo binario
-      final contentType = response.headers['content-type'] ?? '';
+      // Decodificar caracteres especiales si es necesario
+      filePath = Uri.decodeFull(filePath);
       
-      if (contentType.startsWith('application/json')) {
-        // Si el servidor devuelve JSON en lugar del archivo
-        try {
-          final errorData = json.decode(response.body);
-          throw Exception('Error del servidor: ${errorData['error'] ?? errorData['message'] ?? response.body}');
-        } catch (e) {
-          throw Exception('Error del servidor: ${response.body}');
-        }
+      // Extraer el nombre del archivo del path
+      String fileName = filePath.split('/').last;
+      if (fileName.isEmpty) {
+        fileName = 'archivo_${resourceType}_${resourceId}_${DateTime.now().millisecondsSinceEpoch}';
       }
       
-      // Sanitizar el nombre del archivo
-      String safeFileName = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-      if (safeFileName.isEmpty) {
-        safeFileName = 'archivo_descargado_${DateTime.now().millisecondsSinceEpoch}';
+      print('File Name: $fileName');
+
+      // Construir la URL completa usando la ruta real del archivo
+      // IMPORTANTE: Usar la baseUrl + archivo_ruta directamente
+      final baseUrl = ApiConnection.baseUrl;
+      
+      // Asegurar que la ruta comience con /
+      String cleanFilePath = filePath;
+      if (!cleanFilePath.startsWith('/')) {
+        cleanFilePath = '/$cleanFilePath';
       }
       
-      // Obtener directorio para guardar
+      // Construir URL completa
+      final String fileUrl = baseUrl + cleanFilePath;
+      print('Download URL: $fileUrl');
+
+      // Crear directorio de descarga
       final directory = await getApplicationDocumentsDirectory();
-      final filePathLocal = '${directory.path}/downloads/$safeFileName';
-      
-      // Crear directorio si no existe
       final downloadDir = Directory('${directory.path}/downloads');
       if (!await downloadDir.exists()) {
         await downloadDir.create(recursive: true);
+        print('Created download directory: ${downloadDir.path}');
       }
-      
-      // Guardar el archivo
-      final file = File(filePathLocal);
-      await file.writeAsBytes(response.bodyBytes);
-      
-      // Verificar que se guardó correctamente
-      final fileSize = await file.length();
-      if (fileSize > 0) {
-        print('✅ File downloaded successfully!');
-        print('   Local Path: ${file.path}');
-        print('   Size: $fileSize bytes');
-        return file;
-      } else {
-        throw Exception('El archivo descargado está vacío');
-      }
-    } 
-    // Si falla con el path completo, intentar solo con el nombre del archivo
-    else if (response.statusCode == 404 || response.statusCode == 400) {
-      print('First attempt failed with ${response.statusCode}, trying with filename only');
-      
-      // SEGUNDO INTENTO: Usar solo el nombre del archivo
-      String secondEndpoint;
-      if (resourceType == 'tarea') {
-        secondEndpoint = '${ApiConnection.baseUrl}/api/tareas/$resourceId/descargar?file=${Uri.encodeComponent(fileName)}';
-      } else {
-        secondEndpoint = '${ApiConnection.baseUrl}/api/entregas/$resourceId/descargar?file=${Uri.encodeComponent(fileName)}';
-      }
-      
-      print('Download URL (Attempt 2): $secondEndpoint');
-      
-      final secondResponse = await http.get(
-        Uri.parse(secondEndpoint),
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Accept': 'application/octet-stream',
-          ...ApiConnection.jsonHeaders,
-        },
-      );
-      
-      if (secondResponse.statusCode == 200) {
-        // Guardar el archivo (código similar al anterior)
-        String safeFileName = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-        if (safeFileName.isEmpty) {
-          safeFileName = 'archivo_descargado_${DateTime.now().millisecondsSinceEpoch}';
-        }
-        
-        final directory = await getApplicationDocumentsDirectory();
-        final filePathLocal = '${directory.path}/downloads/$safeFileName';
-        
-        final downloadDir = Directory('${directory.path}/downloads');
-        if (!await downloadDir.exists()) {
-          await downloadDir.create(recursive: true);
-        }
-        
-        final file = File(filePathLocal);
-        await file.writeAsBytes(secondResponse.bodyBytes);
-        
-        final fileSize = await file.length();
-        if (fileSize > 0) {
-          print('✅ File downloaded successfully (second attempt)!');
-          print('   Local Path: ${file.path}');
-          print('   Size: $fileSize bytes');
-          return file;
-        }
-      }
-      
-      // Si ambos intentos fallan, probar endpoints alternativos
-      return await _tryAlternativeDownloadMethods(resourceType, resourceId, filePath, fileName);
-    } 
-    else {
-      String errorMessage = 'Error ${response.statusCode} al descargar archivo';
-      try {
-        final errorData = json.decode(response.body);
-        errorMessage += ': ${errorData['error'] ?? errorData['message'] ?? response.body}';
-      } catch (_) {
-        if (response.body.isNotEmpty) {
-          errorMessage += ': ${response.body}';
-        }
-      }
-      throw Exception(errorMessage);
-    }
-  } catch (e) {
-    print('❌ Error en downloadFile: $e');
-    print('Stack trace: ${e.toString()}');
-    
-    // Intentar métodos alternativos como último recurso
-    try {
-      return await _tryAlternativeDownloadMethods(
-        resourceType, 
-        resourceId, 
-        filePath, 
-        filePath.split('/').last
-      );
-    } catch (e2) {
-      rethrow;
-    }
-  }
-}
 
-// Método auxiliar para intentar diferentes formatos de URL
-Future<File> _tryAlternativeDownloadMethods(
-  String resourceType, 
-  int resourceId, 
-  String filePath, 
-  String fileName
-) async {
-  print('=== TRYING ALTERNATIVE DOWNLOAD METHODS ===');
-  
-  // Diferentes formatos de URL que podrían funcionar
-  final urlFormats = [
-    // Formato 1: Con el path completo codificado
-    '${ApiConnection.baseUrl}/api/$resourceType/$resourceId/download?path=${Uri.encodeComponent(filePath)}',
-    
-    // Formato 2: Con solo el nombre del archivo
-    '${ApiConnection.baseUrl}/api/$resourceType/$resourceId/download?filename=${Uri.encodeComponent(fileName)}',
-    
-    // Formato 3: Sin parámetros
-    '${ApiConnection.baseUrl}/api/$resourceType/$resourceId/download',
-    
-    // Formato 4: Ruta directa al archivo
-    '${ApiConnection.baseUrl}/api/$resourceType/$resourceId/file',
-    
-    // Formato 5: Otra variante común
-    '${ApiConnection.baseUrl}/api/download/$resourceType/$resourceId',
-  ];
-  
-  for (int i = 0; i < urlFormats.length; i++) {
-    final url = urlFormats[i];
-    try {
-      print('Trying alternative URL $i: $url');
+      // Sanitizar el nombre del archivo
+      String safeFileName = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+      if (safeFileName.isEmpty) {
+        safeFileName = 'archivo_${resourceType}_${resourceId}_${DateTime.now().millisecondsSinceEpoch}';
+      }
+      
+      final filePathLocal = '${downloadDir.path}/$safeFileName';
+      print('Local Path: $filePathLocal');
+
+      // Verificar si el archivo ya existe localmente
+      final localFile = File(filePathLocal);
+      if (await localFile.exists()) {
+        final fileSize = await localFile.length();
+        if (fileSize > 0) {
+          print('✅ File already exists locally: ${localFile.path} (${fileSize} bytes)');
+          return localFile;
+        } else {
+          print('⚠️ Local file exists but is empty, re-downloading...');
+          await localFile.delete();
+        }
+      }
+
+      // REALIZAR LA DESCARGA CON LOS HEADERS CORRECTOS
+      print('Starting download from: $fileUrl');
+      
+      // IMPORTANTE: NO usar headers JSON para archivos binarios
+      // Solo usar Accept: */* y Authorization si es necesario
+      final Map<String, String> headers = {
+        'Accept': '*/*',  // Aceptar cualquier tipo de contenido
+      };
+      
+      // Agregar Authorization solo si está disponible en ApiConnection.jsonHeaders
+      if (ApiConnection.jsonHeaders.containsKey('Authorization')) {
+        headers['Authorization'] = ApiConnection.jsonHeaders['Authorization']!;
+      }
+      
+      print('Using headers: $headers');
       
       final response = await http.get(
-        Uri.parse(url),
-        headers: ApiConnection.jsonHeaders,
+        Uri.parse(fileUrl),
+        headers: headers,
       );
-      
-      print('Alternative $i response: ${response.statusCode}');
-      
+
+      print('Response Status: ${response.statusCode}');
+      print('Content-Type: ${response.headers['content-type']}');
+      print('Content-Length: ${response.headers['content-length']}');
+
       if (response.statusCode == 200) {
-        // Sanitizar nombre del archivo
-        String safeFileName = fileName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
-        if (safeFileName.isEmpty) {
-          safeFileName = 'archivo_descargado_${DateTime.now().millisecondsSinceEpoch}';
+        // VERIFICAR que response.bodyBytes no esté vacío
+        if (response.bodyBytes.isEmpty) {
+          throw Exception('El archivo está vacío o no se pudo descargar');
         }
+        
+        final fileSize = response.bodyBytes.length;
+        print('File size from response: $fileSize bytes');
         
         // Guardar el archivo
-        final directory = await getApplicationDocumentsDirectory();
-        final downloadDir = Directory('${directory.path}/downloads');
-        if (!await downloadDir.exists()) {
-          await downloadDir.create(recursive: true);
-        }
+        await localFile.writeAsBytes(response.bodyBytes);
+        final savedFileSize = await localFile.length();
         
-        final filePathLocal = '${directory.path}/downloads/$safeFileName';
-        final file = File(filePathLocal);
-        await file.writeAsBytes(response.bodyBytes);
-        
-        if (await file.length() > 0) {
-          print('✅ Success with alternative URL $i');
-          return file;
+        if (savedFileSize > 0) {
+          print('✅ File downloaded successfully!');
+          print(' Local Path: ${localFile.path}');
+          print(' Saved Size: $savedFileSize bytes');
+          return localFile;
+        } else {
+          throw Exception('Error al guardar el archivo localmente (tamaño 0)');
         }
-      }
-    } catch (e) {
-      print('Failed with alternative URL $i: $e');
-      continue;
-    }
-  }
-  
-  throw Exception('No se pudo descargar el archivo con ninguna de las rutas disponibles. Verifica la configuración del servidor.');
-}
-
-  // Método alternativo de descarga si el principal falla
-  Future<File> downloadFileAlternative({
-    required String resourceType,
-    required int resourceId,
-    required String fileName,
-  }) async {
-    try {
-      print('=== ALTERNATIVE DOWNLOAD ===');
-      
-      // Intentar diferentes formatos de URL
-      final urlFormats = [
-        '${ApiConnection.baseUrl}/api/descargar/$resourceType/$resourceId/$fileName',
-        '${ApiConnection.baseUrl}/api/$resourceType/$resourceId/archivo',
-        '${ApiConnection.baseUrl}/uploads/$resourceType/${fileName.split('/').last}',
-        '${ApiConnection.baseUrl}/archivos/$resourceType/$resourceId',
-      ];
-      
-      for (final url in urlFormats) {
-        try {
-          print('Trying URL: $url');
-          final response = await http.get(Uri.parse(url));
-          
-          if (response.statusCode == 200) {
-            final directory = await getApplicationDocumentsDirectory();
-            final safeFileName = fileName.split('/').last.replaceAll(RegExp(r'[^\w\.-]'), '_');
-            final filePath = '${directory.path}/$safeFileName';
-            
-            final file = File(filePath);
-            await file.writeAsBytes(response.bodyBytes);
-            
-            print('✅ Success with alternative URL');
-            return file;
-          }
-        } catch (e) {
-          print('Failed with URL $url: $e');
-          continue;
-        }
+      } else if (response.statusCode == 404) {
+        throw Exception('El archivo no se encuentra en el servidor (Error 404)');
+      } else if (response.statusCode == 403) {
+        throw Exception('No tienes permisos para acceder a este archivo');
+      } else {
+        throw Exception('Error del servidor: ${response.statusCode} - ${response.body}');
       }
       
-      throw Exception('No se pudo descargar el archivo con ninguna de las rutas disponibles');
     } catch (e) {
-      print('Error en downloadFileAlternative: $e');
-      rethrow;
+      print('❌ Error en downloadFile: $e');
+      print('Stack trace: ${e.toString()}');
+      
+      // Propagar el error con un mensaje más claro
+      if (e.toString().contains('Connection refused') || 
+          e.toString().contains('Failed host lookup')) {
+        throw Exception('No se pudo conectar al servidor. Verifica tu conexión a internet.');
+      } else if (e.toString().contains('404')) {
+        throw Exception('El archivo no existe en el servidor.');
+      } else if (e.toString().contains('403')) {
+        throw Exception('No tienes permisos para descargar este archivo.');
+      } else {
+        rethrow;
+      }
     }
   }
 
-  // Método para verificar si el archivo existe en el servidor
-  Future<bool> checkFileExists({
-    required String resourceType,
-    required int resourceId,
-    required String filePath,
-  }) async {
+  // Método para verificar si un archivo existe en el servidor (simple)
+  Future<bool> checkFileExists(String filePath) async {
     try {
-      final endpoint = '${ApiConnection.baseUrl}/api/$resourceType/$resourceId/check-file?file=${Uri.encodeComponent(filePath)}';
-      final response = await http.head(Uri.parse(endpoint));
+      final baseUrl = ApiConnection.baseUrl;
       
-      print('Check file exists response: ${response.statusCode}');
+      // Asegurar que la ruta comience con /
+      String cleanFilePath = filePath;
+      if (!cleanFilePath.startsWith('/')) {
+        cleanFilePath = '/$cleanFilePath';
+      }
+      
+      final String fileUrl = baseUrl + cleanFilePath;
+      print('Checking file existence at: $fileUrl');
+      
+      final response = await http.head(
+        Uri.parse(fileUrl),
+        headers: {'Accept': '*/*'},
+      );
+      
+      print('File check status: ${response.statusCode}');
       return response.statusCode == 200;
     } catch (e) {
       print('Error checking file existence: $e');
       return false;
     }
   }
-
+  
   Future<List<dynamic>> getTasksByUser(int userId) async {
     try {
       print('Fetching tasks for user ID: $userId');
@@ -772,7 +605,7 @@ Future<File> _tryAlternativeDownloadMethods(
       throw Exception('Error al obtener tareas del usuario: $e');
     }
   }
-
+  
   Future<List<dynamic>> getPendingTasks(int alumnoId) async {
     try {
       print('Fetching pending tasks for student: $alumnoId');
@@ -796,13 +629,13 @@ Future<File> _tryAlternativeDownloadMethods(
       throw Exception('Error al obtener tareas pendientes: $e');
     }
   }
-
+  
   Future<List<dynamic>> getUpcomingTasks({int? userId}) async {
     try {
       print('Fetching upcoming tasks${userId != null ? ' for user: $userId' : ''}');
       final now = DateTime.now();
       final response = await http.get(
-        Uri.parse(userId != null 
+        Uri.parse(userId != null
             ? '${ApiConnection.getTareasEndpoint()}?user_id=$userId'
             : ApiConnection.getTareasEndpoint()),
         headers: ApiConnection.jsonHeaders,
@@ -810,23 +643,19 @@ Future<File> _tryAlternativeDownloadMethods(
       
       final result = _handleResponse(response);
       final allTasks = result is List ? result : [];
-
       final upcomingTasks = allTasks.where((task) {
         if (task['fecha_entrega'] == null) return false;
-
         try {
           final fechaEntrega = DateTime.parse(task['fecha_entrega'].toString());
           final isUpcoming = fechaEntrega.isAfter(now) ||
               (fechaEntrega.year == now.year &&
                   fechaEntrega.month == now.month &&
                   fechaEntrega.day == now.day);
-
           return isUpcoming;
         } catch (e) {
           return false;
         }
       }).toList();
-
       print('Found ${upcomingTasks.length} upcoming tasks');
       return upcomingTasks;
     } catch (e) {
@@ -834,7 +663,7 @@ Future<File> _tryAlternativeDownloadMethods(
       throw Exception('Error al obtener tareas próximas: $e');
     }
   }
-
+  
   Future<List<Map<String, dynamic>>> displayTasks({
     required int userId,
     String? userRole,
@@ -847,7 +676,6 @@ Future<File> _tryAlternativeDownloadMethods(
       print('Raw tasks from API: ${tasks.length}');
       
       final formattedTasks = <Map<String, dynamic>>[];
-
       for (final task in tasks) {
         print('\n--- Processing Task ---');
         print('ID: ${task['id']}, Title: ${task['titulo']}');
@@ -986,7 +814,6 @@ Future<File> _tryAlternativeDownloadMethods(
           
           print('Total formatted deliveries: ${formattedEntregas.length}');
         }
-
         // Determinar el status de la tarea
         String taskStatus;
         if (userRole == 'alumno') {
@@ -994,10 +821,9 @@ Future<File> _tryAlternativeDownloadMethods(
           taskStatus = formattedEntregas.isNotEmpty ? 'delivered' : 'pending';
         } else {
           // Para profesores, usar el status de la tarea o determinar por entregas
-          taskStatus = task['status']?.toString().toLowerCase() ?? 
+          taskStatus = task['status']?.toString().toLowerCase() ??
                       (formattedEntregas.isNotEmpty ? 'delivered' : 'pending');
         }
-
         // Formatear fecha de entrega
         String fechaEntrega;
         try {
@@ -1043,7 +869,6 @@ Future<File> _tryAlternativeDownloadMethods(
         // Extraer ruta del archivo de la tarea
         String archivoRutaTarea = task['archivo_ruta']?.toString() ?? 'Sin archivo';
         print('Task file path: $archivoRutaTarea');
-
         final formattedTask = {
           'id': int.parse(task['id']?.toString() ?? '0'),
           'title': task['titulo']?.toString() ?? 'Sin título',
@@ -1060,17 +885,16 @@ Future<File> _tryAlternativeDownloadMethods(
         formattedTasks.add(formattedTask);
         print('✅ Added formatted task: ${formattedTask['id']} - ${formattedTask['title']}');
       }
-
       print('\n=== DISPLAY TASKS RESULT ===');
       print('Total formatted tasks: ${formattedTasks.length}');
       for (var task in formattedTasks) {
-        print('  Task ${task['id']}: ${task['title']}');
-        print('    Status: ${task['status']}');
-        print('    Deliveries: ${task['deliveries'].length}');
-        print('    File: ${task['archivo_ruta']}');
+        print(' Task ${task['id']}: ${task['title']}');
+        print(' Status: ${task['status']}');
+        print(' Deliveries: ${task['deliveries'].length}');
+        print(' File: ${task['archivo_ruta']}');
         if (task['deliveries'].isNotEmpty) {
-          print('    First delivery calificacion: ${task['deliveries'][0]['calificacion']}');
-          print('    First delivery file: ${task['deliveries'][0]['archivo_ruta']}');
+          print(' First delivery calificacion: ${task['deliveries'][0]['calificacion']}');
+          print(' First delivery file: ${task['deliveries'][0]['archivo_ruta']}');
         }
       }
       print('=== DISPLAY TASKS END ===\n');
@@ -1082,7 +906,7 @@ Future<File> _tryAlternativeDownloadMethods(
       throw Exception('Error al mostrar tareas: $e');
     }
   }
-
+  
   Future<List<dynamic>> getAllAnnouncements() async {
     try {
       print('Fetching all announcements...');
@@ -1097,7 +921,7 @@ Future<File> _tryAlternativeDownloadMethods(
       return [];
     }
   }
-
+  
   Future<dynamic> getAnnouncementById(int announcementId) async {
     try {
       print('Fetching announcement by ID: $announcementId');
@@ -1111,7 +935,7 @@ Future<File> _tryAlternativeDownloadMethods(
       rethrow;
     }
   }
-
+  
   Future<dynamic> createAnnouncement({
     required int idUsuario,
     required String texto,
@@ -1122,7 +946,6 @@ Future<File> _tryAlternativeDownloadMethods(
       var uri = Uri.parse(ApiConnection.getAvisosEndpoint());
       const int maxRedirects = 5;
       int redirectCount = 0;
-
       while (redirectCount < maxRedirects) {
         final response = await http.post(
           uri,
@@ -1133,10 +956,8 @@ Future<File> _tryAlternativeDownloadMethods(
             'texto': texto,
           }),
         );
-
         print('Create announcement response: ${response.statusCode}');
         print('Response body: ${response.body}');
-
         if (response.statusCode >= 200 && response.statusCode < 300) {
           try {
             return response.body.isNotEmpty ? json.decode(response.body) : {
@@ -1170,7 +991,7 @@ Future<File> _tryAlternativeDownloadMethods(
       rethrow;
     }
   }
-
+  
   Future<dynamic> updateAnnouncement({
     required int announcementId,
     required int idUsuario,
@@ -1182,7 +1003,6 @@ Future<File> _tryAlternativeDownloadMethods(
       var uri = Uri.parse(ApiConnection.getAvisoByIdEndpoint(announcementId));
       const int maxRedirects = 5;
       int redirectCount = 0;
-
       while (redirectCount < maxRedirects) {
         final response = await http.put(
           uri,
@@ -1193,10 +1013,8 @@ Future<File> _tryAlternativeDownloadMethods(
             'texto': texto,
           }),
         );
-
         print('Update announcement response: ${response.statusCode}');
         print('Response body: ${response.body}');
-
         if (response.statusCode >= 200 && response.statusCode < 300) {
           try {
             return response.body.isNotEmpty ? json.decode(response.body) : {
@@ -1230,7 +1048,7 @@ Future<File> _tryAlternativeDownloadMethods(
       rethrow;
     }
   }
-
+  
   Future<void> deleteAnnouncement(int announcementId) async {
     try {
       print('Deleting announcement ID: $announcementId');
