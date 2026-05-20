@@ -100,7 +100,7 @@ flutter --version  # >= 3.0.0
 
 # 1. Clonar el repositorio
 git clone [url-del-repositorio]
-cd mobile
+cd mobile.
 
 # 2. Instalar dependencias
 flutter pub get
